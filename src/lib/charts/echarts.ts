@@ -6,7 +6,7 @@
  * tooltip, drawn on canvas; the heatmaps are plain DOM. Add a chart type or
  * component here before using it in an option, or ECharts will ignore it.
  */
-import { init, use } from 'echarts/core';
+import { use } from 'echarts/core';
 import { BarChart, LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import { LegacyGridContainLabel } from 'echarts/features';
@@ -14,4 +14,6 @@ import { CanvasRenderer } from 'echarts/renderers';
 
 use([BarChart, LineChart, GridComponent, TooltipComponent, LegacyGridContainLabel, CanvasRenderer]);
 
-export { init };
+// Re-exported directly: an `import { init }` + `export { init }` pair makes the
+// SSR build (which never loads charts) warn that `init` is unused.
+export { init } from 'echarts/core';
