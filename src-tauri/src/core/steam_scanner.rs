@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::time::SystemTime;
 use steamlocate::SteamDir;
 
+use crate::core::process_watcher::request_process_match_index_refresh;
 use crate::storage::db::get_db_connection;
 
 #[tauri::command]
@@ -98,6 +99,7 @@ pub fn steam_scan_print() -> Result<(), String> {
     drop(upsert_stmt);
     tx.commit()
         .map_err(|e| format!("Failed to commit Steam scan transaction: {}", e))?;
+    request_process_match_index_refresh();
 
     println!("=== Steam scan completed ===");
     println!(

@@ -1,3 +1,3 @@
-mod commands;
+mod days;
 
-pub use commands::timeline_sessions;
+pub use days::{timeline_days, timeline_months};

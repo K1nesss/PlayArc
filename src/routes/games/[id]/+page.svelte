@@ -1,85 +1,93 @@
+<!--
+	Game Detail (DOIT.md §5) — "How have I played this individual game?"
+	Order: Hero · Overview · 30-day playtime · Weekday × Hour · Sessions · Facts.
+	The hero is the one place game colors are used most liberally.
+-->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { convertFileSrc } from '@tauri-apps/api/core';
-	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { ArrowLeft, EyeOff, Ellipsis, History, RefreshCw, Trash2 } from '@lucide/svelte';
 	import {
 		deleteGame,
 		deleteGameSession,
+		getAnalyticsOverview,
 		getGameDetail,
 		hideGame,
-		syncSteamOwnedGameIcons,
+		type AnalyticsOverview,
 		type GameDetail
 	} from '$lib/api';
-	import { loadSettingsFromStorage, type AppLanguage } from '$lib/settings';
+	import {
+		formatDayTime,
+		formatFullDate,
+		formatPlaytime,
+		formatPlaytimeParts,
+		formatRelativeDay,
+		formatTimeRange
+	} from '$lib/format';
+	import { t } from '$lib/i18n.svelte';
+	import {
+		Badge,
+		Button,
+		EmptyState,
+		Icon,
+		IconButton,
+		InlineNotice,
+		Popover,
+		Skeleton,
+		Stat,
+		StatGroup,
+		toast
+	} from '$lib/components/ui';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import Cover from '$lib/components/game/Cover.svelte';
+	import HeroBackdrop from '$lib/components/game/HeroBackdrop.svelte';
+	import DailyBarChart from '$lib/components/charts/DailyBarChart.svelte';
+	import WeekdayHourHeatmap from '$lib/components/charts/WeekdayHourHeatmap.svelte';
 
 	let { data } = $props<{ data: { gameId: number } }>();
 
-	let loading = $state(true);
-	let actionLoading = $state(false);
-	let errorMessage = $state('');
+	const SESSION_LIMIT = 50;
+	const SESSIONS_COLLAPSED = 10;
+
 	let detail = $state<GameDetail | null>(null);
-	let language = $state<AppLanguage>('zh-CN');
-	let confirmDialog = $state({
-		open: false,
-		title: '',
-		message: '',
-		confirmText: '',
-		cancelText: '',
-		variant: 'default' as 'default' | 'danger'
-	});
-	let noticeDialog = $state({
-		open: false,
-		title: '',
-		message: '',
-		confirmText: ''
-	});
-	let confirmResolver: ((value: boolean) => void) | null = null;
+	let overview = $state<AnalyticsOverview | null>(null);
+	let loading = $state(true);
+	let errorMessage = $state('');
+	let menuOpen = $state(false);
+	let busy = $state(false);
+	let showAllSessions = $state(false);
 
-	function t(zh: string, en: string) {
-		return language === 'zh-CN' ? zh : en;
-	}
+	type Confirm = {
+		title: string;
+		message: string;
+		confirmText: string;
+		variant: 'default' | 'danger';
+		run: () => Promise<void>;
+	};
+	let confirm = $state<Confirm | null>(null);
 
-	function formatDateTime(timestamp: number | null) {
-		if (!timestamp) {
-			return '-';
-		}
-		return new Intl.DateTimeFormat(language, {
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit'
-		}).format(new Date(timestamp * 1000));
-	}
+	const headline = $derived(formatPlaytimeParts(detail?.total_playtime_seconds ?? 0));
+	const last30 = $derived(overview ? overview.daily.slice(-30) : []);
+	const median = $derived(overview?.summary.median_session_seconds ?? 0);
+	const visibleSessions = $derived(
+		detail
+			? showAllSessions
+				? detail.recent_sessions
+				: detail.recent_sessions.slice(0, SESSIONS_COLLAPSED)
+			: []
+	);
 
-	function getMediaSrc(path: string | null) {
-		return path ? convertFileSrc(path) : null;
-	}
-
-	async function syncSteamMediaFromSettings() {
-		const settings = loadSettingsFromStorage();
-
-		if (!settings.apiKey || !settings.steam64Id) {
-			return false;
-		}
-
-		try {
-			const summary = await syncSteamOwnedGameIcons(settings.apiKey, settings.steam64Id);
-			return summary.updated_games > 0;
-		} catch (error) {
-			console.warn('Failed to sync Steam game media', error);
-			return false;
-		}
-	}
-
-	async function loadDetail() {
-		loading = true;
+	async function load() {
+		loading = !detail;
 		errorMessage = '';
-
 		try {
-			detail = await getGameDetail(data.gameId, 30);
+			const [nextDetail, nextOverview] = await Promise.all([
+				getGameDetail(data.gameId, SESSION_LIMIT),
+				getAnalyticsOverview(null, data.gameId, 1)
+			]);
+			detail = nextDetail;
+			overview = nextOverview;
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : String(error);
 		} finally {
@@ -87,410 +95,538 @@
 		}
 	}
 
-	function returnToGames() {
-		if (window.history.length > 1) {
-			window.history.back();
-			return;
-		}
-
-		goto(resolve('/games'));
+	function back() {
+		// History back restores the Games page's scroll and filters.
+		if (window.history.length > 1) window.history.back();
+		else void goto(resolve('/games'));
 	}
 
-	function askConfirm(options: {
-		title: string;
-		message: string;
-		confirmText: string;
-		cancelText: string;
-		variant?: 'default' | 'danger';
-	}) {
-		confirmDialog = {
-			open: true,
-			title: options.title,
-			message: options.message,
-			confirmText: options.confirmText,
-			cancelText: options.cancelText,
-			variant: options.variant ?? 'default'
-		};
-
-		return new Promise<boolean>((resolve) => {
-			confirmResolver = resolve;
-		});
+	function ask(next: Confirm) {
+		menuOpen = false;
+		confirm = next;
 	}
 
-	function closeConfirm(result: boolean) {
-		confirmDialog.open = false;
-		confirmResolver?.(result);
-		confirmResolver = null;
-	}
-
-	function showNotice(title: string, message: string, confirmText = t('知道了', 'OK')) {
-		noticeDialog = {
-			open: true,
-			title,
-			message,
-			confirmText
-		};
-	}
-
-	function closeNotice() {
-		noticeDialog.open = false;
-	}
-
-	async function hideCurrentGame() {
-		if (!detail || actionLoading) {
-			return;
-		}
-
-		const confirmed = await askConfirm({
-			title: t('隐藏游戏', 'Hide Game'),
-			message: t(
-				`确定要隐藏“${detail.name}”吗？它会从游戏库列表中移除。`,
-				`Hide "${detail.name}" from the game library?`
-			),
-			confirmText: t('隐藏', 'Hide'),
-			cancelText: t('取消', 'Cancel')
-		});
-		if (!confirmed) {
-			return;
-		}
-
-		actionLoading = true;
+	async function runConfirm() {
+		if (!confirm || busy) return;
+		busy = true;
 		try {
-			await hideGame(detail.id);
-			returnToGames();
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : String(error);
-		} finally {
-			actionLoading = false;
-		}
-	}
-
-	async function deleteCurrentGame() {
-		if (!detail || actionLoading) {
-			return;
-		}
-
-		const confirmed = await askConfirm({
-			title: t('删除游戏', 'Delete Game'),
-			message: t(
-				`确定要删除“${detail.name}”吗？这个游戏和它的所有游玩记录都会被删除。`,
-				`Delete "${detail.name}" and all of its play sessions?`
-			),
-			confirmText: t('删除', 'Delete'),
-			cancelText: t('取消', 'Cancel'),
-			variant: 'danger'
-		});
-		if (!confirmed) {
-			return;
-		}
-
-		actionLoading = true;
-		try {
-			await deleteGame(detail.id);
-			returnToGames();
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : String(error);
-		} finally {
-			actionLoading = false;
-		}
-	}
-
-	async function deleteSession(sessionId: number) {
-		if (actionLoading) {
-			return;
-		}
-
-		const confirmed = await askConfirm({
-			title: t('删除会话', 'Delete Session'),
-			message: t(`确定要删除会话 #${sessionId} 吗？`, `Delete session #${sessionId}?`),
-			confirmText: t('删除', 'Delete'),
-			cancelText: t('取消', 'Cancel'),
-			variant: 'danger'
-		});
-		if (!confirmed) {
-			return;
-		}
-
-		actionLoading = true;
-		errorMessage = '';
-		try {
-			await deleteGameSession(sessionId);
-			await loadDetail();
+			await confirm.run();
+			confirm = null;
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			if (message.toLowerCase().includes('active session')) {
-				showNotice(
-					t('无法删除正在进行的记录', 'Cannot Delete Active Session'),
-					t(
-						'这个游戏当前仍在运行中。请先退出游戏，等待记录结束后再删除。',
-						'This game is still running. Stop the game and wait for the session to finish before deleting it.'
-					)
-				);
-			} else {
-				errorMessage = message;
-			}
+			confirm = null;
+			toast.error({
+				title: message.toLowerCase().includes('active session')
+					? t('无法删除正在进行的会话', 'Can’t delete a running session')
+					: t('操作失败', 'Something went wrong'),
+				description: message.toLowerCase().includes('active session')
+					? t(
+							'请先退出游戏，等会话结束后再删除。',
+							'Quit the game first, then delete it once the session ends.'
+						)
+					: message
+			});
 		} finally {
-			actionLoading = false;
+			busy = false;
 		}
+	}
+
+	function confirmHide() {
+		if (!detail) return;
+		const game = detail;
+		ask({
+			title: t('隐藏这个游戏？', 'Hide this game?'),
+			message: t(
+				`“${game.name}”会从游戏库中隐藏，游玩记录会保留。可在 设置 → 数据 中恢复。`,
+				`“${game.name}” will be hidden from your library. Its play history is kept, and you can restore it in Settings → Data.`
+			),
+			confirmText: t('隐藏', 'Hide'),
+			variant: 'default',
+			run: async () => {
+				await hideGame(game.id);
+				toast.success(t(`已隐藏“${game.name}”`, `Hid “${game.name}”`));
+				void goto(resolve('/games'));
+			}
+		});
+	}
+
+	function confirmDeleteGame() {
+		if (!detail) return;
+		const game = detail;
+		ask({
+			title: t('删除这个游戏？', 'Delete this game?'),
+			message: t(
+				`“${game.name}”及其全部 ${game.session_count} 条游玩记录将被永久删除。`,
+				`“${game.name}” and all ${game.session_count} of its play sessions will be permanently deleted.`
+			),
+			confirmText: t('删除游戏', 'Delete game'),
+			variant: 'danger',
+			run: async () => {
+				await deleteGame(game.id);
+				toast.success(t(`已删除“${game.name}”`, `Deleted “${game.name}”`));
+				void goto(resolve('/games'));
+			}
+		});
+	}
+
+	function confirmDeleteSession(sessionId: number, start: number, duration: number) {
+		ask({
+			title: t('删除这条会话？', 'Delete this session?'),
+			message: t(
+				`${formatDayTime(start)} 的 ${formatPlaytime(duration)} 会话将被永久删除。`,
+				`The ${formatPlaytime(duration)} session from ${formatDayTime(start)} will be permanently deleted.`
+			),
+			confirmText: t('删除', 'Delete'),
+			variant: 'danger',
+			run: async () => {
+				await deleteGameSession(sessionId);
+				toast.success(t('会话已删除', 'Session deleted'));
+				await load();
+			}
+		});
 	}
 
 	onMount(() => {
-		const settings = loadSettingsFromStorage();
-		language = settings.language;
-		loadDetail();
-		syncSteamMediaFromSettings().then((hasUpdates) => {
-			if (hasUpdates) {
-				loadDetail();
-			}
-		});
+		void load();
 	});
 </script>
 
-<section class="app-page">
-	<div class="app-page-inner space-y-6">
-		<div class="flex flex-wrap items-center justify-between gap-3">
-			<button type="button" onclick={returnToGames} class="btn btn-secondary">
-				{t('返回游戏库', 'Back to Games')}
-			</button>
-			<div class="flex flex-wrap items-center gap-2">
-				<button type="button" onclick={loadDetail} class="btn btn-primary" disabled={actionLoading}>
-					{t('刷新', 'Refresh')}
-				</button>
-				<button
-					type="button"
-					onclick={hideCurrentGame}
-					class="btn btn-secondary"
-					disabled={!detail || actionLoading}
-				>
-					{t('隐藏', 'Hide')}
-				</button>
-				<button
-					type="button"
-					onclick={deleteCurrentGame}
-					class="btn border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
-					disabled={!detail || actionLoading}
-				>
-					{t('删除游戏', 'Delete Game')}
-				</button>
-			</div>
-		</div>
-
-		{#if loading}
-			<article class="surface-card p-6">
-				<div class="skeleton-shimmer h-48 rounded-xl"></div>
-				<div class="skeleton-shimmer mt-6 h-8 w-64 rounded-md"></div>
-				<div class="skeleton-shimmer mt-3 h-4 w-40 rounded-md"></div>
-				<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-					{#each [1, 2, 3, 4] as row (row)}
-						<div class="skeleton-shimmer h-20 rounded-xl"></div>
-					{/each}
-				</div>
-			</article>
-		{:else if errorMessage && !detail}
-			<article
-				class="status-message border-red-200 bg-red-50 p-6 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
+<div class="app-page h-full overflow-y-auto">
+	<div class="app-page-inner detail">
+		<nav class="crumbs" aria-label={t('导航', 'Breadcrumb')}>
+			<Button variant="ghost" size="sm" icon={ArrowLeft} onclick={back}
+				>{t('游戏库', 'Games')}</Button
 			>
-				{t('加载失败：', 'Load failed: ')}{errorMessage}
-			</article>
-		{:else if detail}
-			{@const heroSrc = getMediaSrc(detail.hero_path)}
-			<div class="space-y-6">
-				{#if errorMessage}
-					<article
-						class="status-message border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
-					>
-						{errorMessage}
-					</article>
-				{/if}
+		</nav>
 
-				<article class="surface-card overflow-hidden">
-					{#if heroSrc}
-						<div class="relative aspect-[2.5/1] min-h-48 overflow-hidden bg-gray-900">
-							<img src={heroSrc} alt="" class="h-full w-full object-cover" />
-							<div
-								class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"
-							></div>
-							<div class="absolute right-6 bottom-6 left-6">
-								<h1 class="text-3xl font-bold text-white">{detail.name}</h1>
-								<p class="mt-2 text-sm text-gray-200">
-									AppID: {detail.appid ?? '-'} | GameID: {detail.id}
-								</p>
-							</div>
-						</div>
-					{/if}
-
-					<div class="p-6">
-						<div class="flex flex-wrap items-start justify-between gap-4">
-							<div>
-								{#if !heroSrc}
-									<h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
-										{detail.name}
-									</h1>
-									<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-										AppID: {detail.appid ?? '-'} | GameID: {detail.id}
-									</p>
-								{/if}
-							</div>
-							<span
-								class={`rounded-full px-3 py-1 text-xs ${
-									detail.is_installed
-										? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-										: 'bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-								}`}
-							>
-								{detail.is_installed ? t('已安装', 'Installed') : t('未安装', 'Not Installed')}
-							</span>
-						</div>
-
-						<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-							<div class="subtle-panel p-4">
-								<p class="text-xs text-blue-700 dark:text-blue-300">
-									{t('累计游玩', 'Total Playtime')}
-								</p>
-								<p class="mt-2 text-xl font-semibold text-blue-900 dark:text-blue-100">
-									{detail.total_playtime_formatted}
-								</p>
-							</div>
-							<div class="subtle-panel p-4">
-								<p class="text-xs text-purple-700 dark:text-purple-300">
-									{t('总会话数', 'Total Sessions')}
-								</p>
-								<p class="mt-2 text-xl font-semibold text-purple-900 dark:text-purple-100">
-									{detail.session_count}
-								</p>
-							</div>
-							<div class="subtle-panel p-4">
-								<p class="text-xs text-amber-700 dark:text-amber-300">
-									{t('平均会话', 'Average Session')}
-								</p>
-								<p class="mt-2 text-xl font-semibold text-amber-900 dark:text-amber-100">
-									{detail.average_session_formatted}
-								</p>
-							</div>
-							<div class="subtle-panel p-4">
-								<p class="text-xs text-slate-700 dark:text-slate-300">
-									{t('最后游玩', 'Last Played')}
-								</p>
-								<p class="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-									{formatDateTime(detail.last_played_at)}
-								</p>
-							</div>
-						</div>
-
-						<div class="mt-6 grid gap-4 md:grid-cols-2">
-							<div
-								class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-[#101522]"
-							>
-								<p class="text-xs tracking-wide text-gray-500 uppercase dark:text-gray-400">
-									{t('安装路径', 'Install Path')}
-								</p>
-								<p class="mt-2 text-sm break-all text-gray-800 dark:text-gray-200">
-									{detail.install_path ?? '-'}
-								</p>
-							</div>
-							<div
-								class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-[#101522]"
-							>
-								<p class="text-xs tracking-wide text-gray-500 uppercase dark:text-gray-400">
-									{t('更新时间', 'Updated At')}
-								</p>
-								<p class="mt-2 text-sm text-gray-800 dark:text-gray-200">
-									{formatDateTime(detail.updated_at)}
-								</p>
-							</div>
-						</div>
-					</div>
-				</article>
-
-				<article class="surface-card p-6">
-					<h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-						{t('最近会话', 'Recent Sessions')}
-					</h2>
-
-					{#if detail.recent_sessions.length === 0}
-						<p class="mt-4 text-sm text-gray-500 dark:text-gray-400">
-							{t('暂无会话数据', 'No session data')}
-						</p>
-					{:else}
-						<div
-							class="mt-4 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700"
-						>
-							<table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
-								<thead class="bg-gray-50 dark:bg-[#101522]">
-									<tr>
-										<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">
-											{t('会话ID', 'Session ID')}
-										</th>
-										<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">
-											{t('开始时间', 'Start Time')}
-										</th>
-										<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">
-											{t('结束时间', 'End Time')}
-										</th>
-										<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">
-											{t('时长', 'Duration')}
-										</th>
-										<th class="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-300">
-											{t('操作', 'Actions')}
-										</th>
-									</tr>
-								</thead>
-								<tbody
-									class="divide-y divide-gray-100 bg-white dark:divide-gray-800 dark:bg-[#151926]"
-								>
-									{#each detail.recent_sessions as session (session.session_id)}
-										<tr>
-											<td class="px-4 py-3 text-gray-800 dark:text-gray-200">
-												#{session.session_id}
-											</td>
-											<td class="px-4 py-3 text-gray-600 dark:text-gray-300">
-												{formatDateTime(session.start_time)}
-											</td>
-											<td class="px-4 py-3 text-gray-600 dark:text-gray-300">
-												{formatDateTime(session.end_time)}
-											</td>
-											<td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
-												{session.formatted}
-											</td>
-											<td class="px-4 py-3 text-right">
-												<button
-													type="button"
-													onclick={() => deleteSession(session.session_id)}
-													class="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/30"
-													disabled={actionLoading}
-												>
-													{t('删除', 'Delete')}
-												</button>
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					{/if}
-				</article>
+		{#if errorMessage && !detail}
+			<EmptyState
+				bordered
+				tone="error"
+				title={t('无法加载这个游戏', 'Couldn’t load this game')}
+				description={errorMessage}
+			>
+				{#snippet action()}
+					<Button size="sm" icon={RefreshCw} onclick={load}>{t('重试', 'Retry')}</Button>
+				{/snippet}
+			</EmptyState>
+		{:else if loading || !detail}
+			<div class="hero-skeleton">
+				<Skeleton width="128px" height="192px" radius="md" />
+				<div class="flex flex-col gap-3">
+					<Skeleton width="220px" height="24px" />
+					<Skeleton width="120px" height="38px" />
+					<Skeleton width="140px" height="12px" />
+				</div>
 			</div>
+		{:else}
+			<!-- Hero -->
+			<HeroBackdrop
+				artPath={detail.hero_path ?? detail.cover_path}
+				accent={detail.accent_color}
+				intensity="rich"
+			>
+				<div class="hero">
+					<Cover name={detail.name} path={detail.cover_path} size={128} />
+					<div class="hero-text">
+						<div class="flex flex-wrap items-center gap-2">
+							<h1 class="hero-title">{detail.name}</h1>
+							{#if !detail.is_installed}<Badge>{t('未安装', 'Not installed')}</Badge>{/if}
+						</div>
+						<p class="hero-metric">
+							{headline.value}<span class="hero-unit">{headline.unit}</span>
+						</p>
+						<p class="hero-meta">
+							{detail.last_played_at
+								? t(
+										`最后游玩：${formatRelativeDay(detail.last_played_at)}`,
+										`Last played ${formatRelativeDay(detail.last_played_at)}`
+									)
+								: t('尚未游玩', 'Not played yet')}
+						</p>
+					</div>
+					<div class="hero-actions">
+						<Popover bind:open={menuOpen} placement="bottom-end" role="menu">
+							{#snippet trigger(props)}
+								<IconButton
+									icon={Ellipsis}
+									label={t('更多操作', 'More actions')}
+									variant="secondary"
+									{...props}
+								/>
+							{/snippet}
+							<div class="menu" role="menu">
+								<button type="button" role="menuitem" class="menu-item" onclick={confirmHide}>
+									<Icon icon={EyeOff} size="button" />{t('从游戏库隐藏', 'Hide from library')}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									class="menu-item menu-item--danger"
+									onclick={confirmDeleteGame}
+								>
+									<Icon icon={Trash2} size="button" />{t(
+										'删除游戏和记录',
+										'Delete game and history'
+									)}
+								</button>
+							</div>
+						</Popover>
+					</div>
+				</div>
+			</HeroBackdrop>
+
+			<!-- Overview metrics: typography, not boxes (§5). Total is the hero metric above. -->
+			<StatGroup class="overview">
+				<Stat label={t('会话', 'Sessions')} value={detail.session_count} size="md" />
+				<Stat
+					label={t('平均会话', 'Average session')}
+					value={formatPlaytime(detail.average_session_seconds)}
+					size="md"
+				/>
+				<Stat label={t('中位会话', 'Median session')} value={formatPlaytime(median)} size="md" />
+				<Stat
+					label={t('最长会话', 'Longest session')}
+					value={formatPlaytime(overview?.summary.longest_session_seconds ?? 0)}
+					size="md"
+				/>
+			</StatGroup>
+
+			{#if errorMessage}
+				<InlineNotice tone="danger">{errorMessage}</InlineNotice>
+			{/if}
+
+			<DailyBarChart
+				items={last30}
+				title={t('近 30 天', 'Last 30 days')}
+				description={t('每日游玩时长', 'Daily playtime')}
+				height="sm"
+				loading={!overview}
+			/>
+
+			<WeekdayHourHeatmap
+				grid={overview?.weekday_hour ?? []}
+				description={t('全部游玩记录', 'All play history')}
+				loading={!overview}
+			/>
+
+			<!-- Session history -->
+			<section class="panel" aria-labelledby="sessions-title">
+				<header class="panel-header">
+					<div>
+						<h2 id="sessions-title" class="panel-title">{t('会话记录', 'Session history')}</h2>
+						{#if detail.session_count > detail.recent_sessions.length}
+							<p class="panel-description">
+								{t(
+									`最近 ${detail.recent_sessions.length} 条，共 ${detail.session_count} 条`,
+									`Latest ${detail.recent_sessions.length} of ${detail.session_count}`
+								)}
+							</p>
+						{/if}
+					</div>
+					<Button
+						size="sm"
+						variant="ghost"
+						icon={History}
+						href={`${resolve('/timeline')}?game=${detail.id}`}
+					>
+						{t('在时间线中查看', 'View in Timeline')}
+					</Button>
+				</header>
+				{#if detail.recent_sessions.length === 0}
+					<EmptyState compact title={t('还没有会话', 'No sessions yet')} />
+				{:else}
+					<ul class="sessions">
+						{#each visibleSessions as session (session.session_id)}
+							<li class="session">
+								<span class="session-day">{formatRelativeDay(session.start_time)}</span>
+								<span class="session-range tabular-nums"
+									>{formatTimeRange(session.start_time, session.end_time)}</span
+								>
+								{#if !session.end_time}<Badge tone="success">{t('进行中', 'Live')}</Badge>{/if}
+								<span class="session-duration tabular-nums"
+									>{formatPlaytime(session.duration_seconds)}</span
+								>
+								<span class="session-action">
+									<IconButton
+										icon={Trash2}
+										label={t('删除会话', 'Delete session')}
+										size="sm"
+										disabled={!session.end_time}
+										onclick={() =>
+											confirmDeleteSession(
+												session.session_id,
+												session.start_time,
+												session.duration_seconds
+											)}
+									/>
+								</span>
+							</li>
+						{/each}
+					</ul>
+					{#if detail.recent_sessions.length > SESSIONS_COLLAPSED}
+						<div class="mt-2">
+							<Button
+								size="sm"
+								variant="ghost"
+								onclick={() => (showAllSessions = !showAllSessions)}
+							>
+								{showAllSessions
+									? t('收起', 'Show less')
+									: t(
+											`显示更多（${detail.recent_sessions.length}）`,
+											`Show more (${detail.recent_sessions.length})`
+										)}
+							</Button>
+						</div>
+					{/if}
+				{/if}
+			</section>
+
+			<!-- Facts -->
+			<section class="panel" aria-labelledby="facts-title">
+				<h2 id="facts-title" class="panel-title mb-3">{t('详情', 'Details')}</h2>
+				<dl class="facts">
+					<div>
+						<dt>{t('首次游玩', 'First played')}</dt>
+						<dd>
+							{overview?.summary.first_played_at
+								? formatFullDate(new Date(overview.summary.first_played_at * 1000))
+								: '—'}
+						</dd>
+					</div>
+					<div>
+						<dt>{t('最后游玩', 'Last played')}</dt>
+						<dd>{formatDayTime(detail.last_played_at)}</dd>
+					</div>
+					<div>
+						<dt>{t('总时长', 'Total playtime')}</dt>
+						<dd>{formatPlaytime(detail.total_playtime_seconds)}</dd>
+					</div>
+					<div>
+						<dt>{t('活跃天数', 'Days played')}</dt>
+						<dd>{overview?.summary.active_days ?? '—'}</dd>
+					</div>
+					<div>
+						<dt>{t('加入游戏库', 'Added')}</dt>
+						<dd>{formatFullDate(new Date(detail.created_at * 1000))}</dd>
+					</div>
+					{#if detail.appid}<div>
+							<dt>Steam App ID</dt>
+							<dd class="tabular-nums">{detail.appid}</dd>
+						</div>{/if}
+					{#if detail.install_path}
+						<div class="facts-wide">
+							<dt>{t('安装位置', 'Install location')}</dt>
+							<dd class="path" title={detail.install_path}>{detail.install_path}</dd>
+						</div>
+					{/if}
+				</dl>
+			</section>
 		{/if}
 	</div>
-</section>
+</div>
 
 <ConfirmDialog
-	open={confirmDialog.open}
-	title={confirmDialog.title}
-	message={confirmDialog.message}
-	confirmText={confirmDialog.confirmText}
-	cancelText={confirmDialog.cancelText}
-	variant={confirmDialog.variant}
-	onConfirm={() => closeConfirm(true)}
-	onCancel={() => closeConfirm(false)}
+	open={confirm !== null}
+	title={confirm?.title ?? ''}
+	message={confirm?.message ?? ''}
+	confirmText={confirm?.confirmText ?? ''}
+	cancelText={t('取消', 'Cancel')}
+	variant={confirm?.variant ?? 'default'}
+	loading={busy}
+	onConfirm={runConfirm}
+	onCancel={() => !busy && (confirm = null)}
 />
 
-<ConfirmDialog
-	open={noticeDialog.open}
-	title={noticeDialog.title}
-	message={noticeDialog.message}
-	confirmText={noticeDialog.confirmText}
-	showCancel={false}
-	onConfirm={closeNotice}
-	onCancel={closeNotice}
-/>
+<style>
+	.detail {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		padding-bottom: var(--space-8);
+	}
+	.detail > :global(*) {
+		max-width: 1080px;
+	}
+	.crumbs {
+		margin: calc(-1 * var(--space-2)) 0 0 calc(-1 * var(--space-2));
+	}
+
+	.hero-skeleton {
+		display: flex;
+		align-items: center;
+		gap: var(--space-6);
+		padding: var(--space-6);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-xl);
+		background: var(--bg-surface);
+	}
+	.hero {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-6);
+		padding: var(--space-6);
+	}
+	.hero :global(.cover) {
+		box-shadow:
+			inset 0 0 0 1px var(--border-subtle),
+			var(--elevation-artwork);
+	}
+	.hero-text {
+		flex: 1;
+		min-width: 0;
+		padding-bottom: var(--space-1);
+	}
+	.hero-title {
+		font-size: var(--text-2xl);
+		font-weight: 600;
+		line-height: var(--text-2xl--line-height);
+		color: var(--text-primary);
+	}
+	.hero-metric {
+		margin-top: var(--space-3);
+		font-size: var(--text-4xl);
+		font-weight: 600;
+		line-height: var(--text-4xl--line-height);
+		letter-spacing: -0.015em;
+		font-variant-numeric: tabular-nums;
+		color: var(--text-primary);
+	}
+	.hero-unit {
+		margin-left: 2px;
+		font-size: 0.55em;
+		font-weight: 500;
+		color: var(--text-secondary);
+	}
+	.hero-meta {
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+	}
+	.hero-actions {
+		align-self: flex-start;
+	}
+
+	.menu {
+		display: flex;
+		flex-direction: column;
+		min-width: 200px;
+	}
+	.menu-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		height: 32px;
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-sm);
+		font-size: var(--text-base);
+		color: var(--text-primary);
+		text-align: left;
+	}
+	.menu-item:hover,
+	.menu-item:focus-visible {
+		background: var(--state-hover);
+		outline: none;
+	}
+	.menu-item--danger {
+		color: var(--danger);
+	}
+	.menu-item--danger:hover {
+		background: var(--danger-soft);
+	}
+
+	.detail :global(.overview) {
+		padding: var(--space-2) var(--space-1);
+	}
+
+	.panel {
+		padding: var(--space-4) var(--space-5) var(--space-5);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-xl);
+		background: var(--bg-surface);
+		box-shadow: var(--elevation-1);
+	}
+	.panel-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: var(--space-3);
+		margin-bottom: var(--space-2);
+	}
+	.panel-title {
+		font-size: var(--text-base);
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+	.panel-description {
+		margin-top: 2px;
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
+	}
+
+	.sessions {
+		margin: 0 calc(-1 * var(--space-2));
+	}
+	.session {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		height: 40px;
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-md);
+	}
+	.session:hover {
+		background: var(--state-hover);
+	}
+	.session-day {
+		width: 120px;
+		font-size: var(--text-sm);
+		color: var(--text-primary);
+	}
+	.session-range {
+		flex: 1;
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+	}
+	.session-duration {
+		min-width: 64px;
+		text-align: right;
+		font-size: var(--text-base);
+		font-weight: 500;
+		color: var(--text-primary);
+	}
+	.session-action {
+		opacity: 0;
+		transition: opacity var(--duration-fast) var(--ease-standard);
+	}
+	.session:hover .session-action,
+	.session:focus-within .session-action {
+		opacity: 1;
+	}
+
+	.facts {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		gap: var(--space-4) var(--space-6);
+	}
+	.facts dt {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+	}
+	.facts dd {
+		margin-top: 2px;
+		font-size: var(--text-base);
+		color: var(--text-primary);
+	}
+	.facts-wide {
+		grid-column: 1 / -1;
+	}
+	.path {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--font-mono);
+		font-size: var(--text-sm) !important;
+		color: var(--text-secondary) !important;
+	}
+</style>

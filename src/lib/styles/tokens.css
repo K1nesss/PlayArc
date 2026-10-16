@@ -1,0 +1,256 @@
+/*
+ * PlayArc design tokens (DOIT.md §14, §16–§20, §32, §34).
+ *
+ * Two layers:
+ *   1. Raw tokens on :root / .dark  — the source of truth (colors, spacing, motion, layout…).
+ *   2. Tailwind @theme mapping       — so utilities (text-sm, rounded-xl, text-fg-muted,
+ *                                      bg-surface…) resolve to the same scale.
+ *
+ * Rule of thumb: use semantic utilities / var(--token), never literal values.
+ */
+
+/* ------------------------------------------------------------------ */
+/* 1. Tailwind theme mapping                                          */
+/* ------------------------------------------------------------------ */
+
+@theme {
+	/* §14 Typography — desktop scale. text-base is 14px (body), not 16px. */
+	--font-sans:
+		'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC',
+		system-ui, sans-serif, 'Segoe UI Emoji';
+	--font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+
+	--text-xs: 12px; /* Caption */
+	--text-xs--line-height: 16px;
+	--text-sm: 13px; /* Small body */
+	--text-sm--line-height: 18px;
+	--text-base: 14px; /* Body */
+	--text-base--line-height: 20px;
+	--text-lg: 16px; /* Subtitle */
+	--text-lg--line-height: 22px;
+	--text-xl: 18px; /* Section heading */
+	--text-xl--line-height: 24px;
+	--text-2xl: 24px; /* Page title */
+	--text-2xl--line-height: 30px;
+	--text-3xl: 30px; /* Metric value (28–32) */
+	--text-3xl--line-height: 36px;
+	--text-4xl: 38px; /* Hero metric (36–40) */
+	--text-4xl--line-height: 44px;
+
+	--font-weight-normal: 400;
+	--font-weight-medium: 500;
+	--font-weight-semibold: 600;
+	/* 700 deliberately aliased to 600 — DOIT §14 "minimize 700". */
+	--font-weight-bold: 600;
+	--font-weight-extrabold: 600;
+
+	/* §17 Radius scale */
+	--radius-sm: 6px; /* Badges / small */
+	--radius-md: 8px; /* Buttons / inputs / sidebar items */
+	--radius-lg: 10px; /* Dropdown menus */
+	--radius-xl: 12px; /* Cards / chart panels */
+	--radius-2xl: 16px; /* Dialogs / large overlays */
+	--radius-3xl: 16px; /* capped — no 24px rounding */
+
+	/* §32 Motion — default `transition` utility = fast */
+	--default-transition-duration: 120ms;
+	--default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Semantic color utilities: bg-canvas, bg-surface, text-fg-muted, border-line, bg-hover… */
+@theme inline {
+	--color-canvas: var(--bg-app);
+	--color-surface: var(--bg-surface);
+	--color-subtle: var(--bg-subtle);
+	--color-elevated: var(--bg-elevated);
+	--color-fg: var(--text-primary);
+	--color-fg-muted: var(--text-secondary);
+	--color-fg-subtle: var(--text-tertiary);
+	--color-line: var(--border-subtle);
+	--color-line-strong: var(--border-normal);
+	--color-accent: var(--accent);
+	--color-accent-hover: var(--accent-hover);
+	--color-accent-soft: var(--accent-soft);
+	--color-on-accent: var(--on-accent);
+	--color-hover: var(--state-hover);
+	--color-pressed: var(--state-active);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-danger: var(--danger);
+	--color-danger-soft: var(--danger-soft);
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. Raw tokens                                                      */
+/* ------------------------------------------------------------------ */
+
+:root {
+	color-scheme: light;
+
+	/* §18 Light colors */
+	--bg-app: #f5f5f4;
+	--bg-surface: #ffffff;
+	--bg-subtle: #fafaf9; /* quiet fills inside surfaces (rows, inputs on hover) */
+	--bg-sidebar: rgba(247, 247, 246, 0.78);
+	--bg-sidebar-solid: #f7f7f6; /* used when window material is unavailable */
+	--bg-elevated: rgba(255, 255, 255, 0.94);
+
+	--text-primary: #202124;
+	/* Tertiary darkened from DOIT's #96999f (2.6:1) to meet WCAG AA 4.5:1 for small text;
+	   secondary nudged darker to keep three distinct steps. */
+	--text-secondary: #55575c;
+	--text-tertiary: #6e7075;
+
+	--border-subtle: rgba(0, 0, 0, 0.055);
+	--border-normal: rgba(0, 0, 0, 0.085);
+	--border-strong: rgba(0, 0, 0, 0.14);
+
+	/* §10 Neutral interaction states */
+	--state-hover: rgba(0, 0, 0, 0.035);
+	--state-active: rgba(0, 0, 0, 0.06);
+
+	/* Accent — DOIT does not specify one; restrained blue, not Steam blue. Review in Stage 1. */
+	--accent: #3d6fe0;
+	--accent-hover: #3262cf;
+	--accent-soft: rgba(61, 111, 224, 0.1);
+	--on-accent: #ffffff;
+	--focus-ring: rgba(61, 111, 224, 0.55);
+
+	--success: #1d8055;
+	--warning: #99651a;
+	--danger: #ce3839;
+	--danger-soft: rgba(209, 57, 58, 0.1);
+
+	/* §24 Chart / heatmap scale — single accent, alpha steps */
+	--chart-accent: #3d6fe0;
+	--chart-neutral: #b4b7bc;
+	--chart-grid: rgba(0, 0, 0, 0.05);
+	--heat-0: rgba(0, 0, 0, 0.045);
+	--heat-1: rgba(61, 111, 224, 0.15);
+	--heat-2: rgba(61, 111, 224, 0.3);
+	--heat-3: rgba(61, 111, 224, 0.55);
+	--heat-4: rgba(61, 111, 224, 0.8);
+	--heat-5: rgba(61, 111, 224, 1);
+
+	--skeleton-base: rgba(0, 0, 0, 0.06);
+	--skeleton-highlight: rgba(255, 255, 255, 0.6);
+
+	/* §20 Light leans on borders + very soft shadows */
+	--elevation-1: 0 1px 2px rgba(0, 0, 0, 0.035);
+	--elevation-2: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.06);
+	--elevation-overlay: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+	/* Lift for game artwork inside heroes */
+	--elevation-artwork: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+	/* Backdrops behind dialogs (scrim) and the command palette (scrim-subtle) */
+	--scrim: rgba(0, 0, 0, 0.28);
+	--scrim-subtle: rgba(0, 0, 0, 0.2);
+
+	/* §16 Spacing — 4px grid */
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 20px;
+	--space-6: 24px;
+	--space-8: 32px;
+	--space-10: 40px;
+	--space-12: 48px;
+
+	/* §32 Motion */
+	--duration-fast: 120ms;
+	--duration-normal: 180ms;
+	--duration-slow: 240ms;
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+	/* §9 / §12 Layout */
+	--sidebar-width: 228px;
+	--sidebar-width-collapsed: 64px;
+	--titlebar-height: 44px;
+	--page-padding-x: 24px;
+	--page-padding-y: 24px;
+	--content-max-width: 1400px;
+	--settings-max-width: 680px;
+
+	/* Control sizes */
+	--control-sm: 28px;
+	--control-md: 32px;
+	--control-lg: 36px;
+	--sidebar-item-height: 38px;
+
+	/* §15 Icon sizes */
+	--icon-xs: 14px;
+	--icon-sm: 16px;
+	--icon-md: 18px;
+	--icon-lg: 24px;
+	--icon-xl: 32px;
+	--icon-stroke: 1.75;
+
+	/* Z-index */
+	--z-sticky: 10;
+	--z-sidebar: 20;
+	--z-titlebar: 30;
+	--z-dropdown: 40;
+	--z-overlay: 50;
+	--z-modal: 60;
+	--z-toast: 70;
+	--z-tooltip: 80;
+}
+
+.dark {
+	color-scheme: dark;
+
+	/* §19 Dark colors — hierarchy via surface brightness, not shadows */
+	--bg-app: #111315;
+	--bg-surface: #17191c;
+	--bg-subtle: #1b1d21;
+	--bg-sidebar: rgba(21, 23, 26, 0.74);
+	--bg-sidebar-solid: #15171a;
+	--bg-elevated: rgba(31, 33, 37, 0.94);
+
+	--text-primary: #f2f3f5;
+	--text-secondary: #a4a8ae;
+	--text-tertiary: #80858c; /* from #73777e (3.9:1) → ≥4.5:1 on every dark surface */
+
+	--border-subtle: rgba(255, 255, 255, 0.055);
+	--border-normal: rgba(255, 255, 255, 0.085);
+	--border-strong: rgba(255, 255, 255, 0.14);
+
+	--state-hover: rgba(255, 255, 255, 0.045);
+	--state-active: rgba(255, 255, 255, 0.075);
+
+	--accent: #7aa2f7;
+	--accent-hover: #8fb1f9;
+	--accent-soft: rgba(122, 162, 247, 0.14);
+	--on-accent: #0e1626;
+	--focus-ring: rgba(122, 162, 247, 0.6);
+
+	--success: #4cc38a;
+	--warning: #e0a84a;
+	--danger: #f06a6a;
+	--danger-soft: rgba(240, 106, 106, 0.14);
+
+	/* Charts use a slightly deeper accent than text in dark mode (validated: OKLCH L 0.48–0.67, ≥3:1). */
+	--chart-accent: #6690ee;
+	--chart-neutral: #5a5e66;
+	--chart-grid: rgba(255, 255, 255, 0.05);
+	--heat-0: rgba(255, 255, 255, 0.05);
+	--heat-1: rgba(102, 144, 238, 0.15);
+	--heat-2: rgba(102, 144, 238, 0.3);
+	--heat-3: rgba(102, 144, 238, 0.55);
+	--heat-4: rgba(102, 144, 238, 0.8);
+	--heat-5: rgba(102, 144, 238, 1);
+
+	--skeleton-base: rgba(255, 255, 255, 0.06);
+	--skeleton-highlight: rgba(255, 255, 255, 0.06);
+
+	/* §20 Dark: shadows nearly invisible */
+	--elevation-1: none;
+	--elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3);
+	--elevation-overlay: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+	--elevation-artwork: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+	--scrim: rgba(0, 0, 0, 0.5);
+	--scrim-subtle: rgba(0, 0, 0, 0.4);
+}

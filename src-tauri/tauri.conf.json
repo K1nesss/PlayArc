@@ -1,7 +1,7 @@
 {
 	"$schema": "./tauri.schema.json",
-	"productName": "Velaris",
-	"mainBinaryName": "Velaris",
+	"productName": "PlayArc",
+	"mainBinaryName": "PlayArc",
 	"version": "0.1.0",
 	"identifier": "com.k1nesss.Velaris",
 	"build": {
@@ -13,13 +13,17 @@
 	"app": {
 		"windows": [
 			{
-				"title": "Velaris",
-				"width": 1024,
-				"height": 768,
+				"label": "main",
+				"create": false,
+				"title": "PlayArc",
+				"width": 1200,
+				"height": 760,
+				"minWidth": 720,
+				"minHeight": 480,
+				"center": true,
 				"resizable": true,
-				"minWidth": 960,
-				"minHeight": 640,
 				"decorations": false,
+				"transparent": false,
 				"fullscreen": false
 			}
 		],
@@ -55,7 +59,7 @@
 	"plugins": {
 		"updater": {
 			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE1NTRFMjBDMzFFRjVFQzUKUldURlh1OHhET0pVRlI0UWN6YjJQbVBKRUdMZDJsUEZzK0lBZUR0bnFzSm50a2dBcmxmMmMxancK",
-			"endpoints": ["https://github.com/K1nesss/Velaris/releases/latest/download/latest.json"],
+			"endpoints": ["https://github.com/K1nesss/PlayArc/releases/latest/download/latest.json"],
 			"windows": {
 				"installMode": "passive"
 			}

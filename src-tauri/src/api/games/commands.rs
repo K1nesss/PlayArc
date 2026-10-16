@@ -6,6 +6,8 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
+use crate::api::common::accent::ensure_accent_color;
+use crate::core::process_watcher::request_process_match_index_refresh;
 use crate::core::steam_scanner::steam_scan_print;
 use crate::storage::db::get_db_connection;
 
@@ -24,22 +26,6 @@ type GameDetailRow = (
     Option<i64>,
     i64,
 );
-
-#[derive(Serialize)]
-pub struct GameListItem {
-    pub id: i32,
-    pub appid: Option<i32>,
-    pub name: String,
-    pub cover_path: Option<String>,
-    pub icon_path: Option<String>,
-    pub hero_path: Option<String>,
-    pub is_installed: bool,
-    pub is_hidden: bool,
-    pub total_playtime_seconds: i64,
-    pub total_playtime_formatted: String,
-    pub last_played_at: Option<i64>,
-    pub session_count: i64,
-}
 
 #[derive(Serialize)]
 pub struct GameDetailSession {
@@ -69,6 +55,8 @@ pub struct GameDetail {
     pub average_session_seconds: i64,
     pub average_session_formatted: String,
     pub recent_sessions: Vec<GameDetailSession>,
+    /// '#rrggbb' from the artwork for the Hero tint (§5); computed once, then cached.
+    pub accent_color: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -94,63 +82,6 @@ pub struct CreateManualGameRequest {
     pub icon_path: Option<String>,
     pub cover_path: Option<String>,
     pub hero_path: Option<String>,
-}
-
-#[tauri::command]
-pub fn games_list(
-    search: Option<String>,
-    installed_only: Option<bool>,
-    limit: Option<i64>,
-) -> Result<Vec<GameListItem>, String> {
-    let conn = get_db_connection()?;
-    let limit = limit.unwrap_or(200).clamp(1, 1000);
-    let installed_only = installed_only.map(|value| if value { 1_i64 } else { 0_i64 });
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT g.id,
-                    g.appid,
-                    g.name,
-                    g.cover_path,
-                    g.icon_path,
-                    g.hero_path,
-                    g.is_installed,
-                    g.is_hidden,
-                    COALESCE(gs.total_playtime_seconds, 0) AS total_playtime_seconds,
-                    gs.last_played_at,
-                    COALESCE((SELECT COUNT(1) FROM game_sessions s WHERE s.game_id = g.id), 0) AS session_count
-             FROM games g
-             LEFT JOIN game_stats gs ON gs.game_id = g.id
-             WHERE (?1 IS NULL OR g.name LIKE '%' || ?1 || '%')
-               AND (?2 IS NULL OR g.is_installed = ?2)
-               AND g.is_hidden = 0
-             ORDER BY g.is_installed DESC, total_playtime_seconds DESC, g.name COLLATE NOCASE ASC
-             LIMIT ?3",
-        )
-        .map_err(|e| e.to_string())?;
-
-    let rows = stmt
-        .query_map(params![search, installed_only, limit], |row| {
-            let total_playtime_seconds: i64 = row.get(8)?;
-            Ok(GameListItem {
-                id: row.get(0)?,
-                appid: row.get(1)?,
-                name: row.get(2)?,
-                cover_path: row.get(3)?,
-                icon_path: row.get(4)?,
-                hero_path: row.get(5)?,
-                is_installed: row.get::<_, i64>(6)? == 1,
-                is_hidden: row.get::<_, i64>(7)? == 1,
-                total_playtime_seconds,
-                total_playtime_formatted: format_duration(total_playtime_seconds),
-                last_played_at: row.get(9)?,
-                session_count: row.get(10)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -248,6 +179,21 @@ pub fn game_detail(id: i64, recent_limit: Option<i64>) -> Result<GameDetail, Str
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
+    let cached_accent: Option<String> = conn
+        .query_row(
+            "SELECT accent_color FROM games WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let accent_color = ensure_accent_color(
+        &conn,
+        id as i64,
+        cached_accent,
+        hero_path.as_deref(),
+        cover_path.as_deref(),
+    );
+
     Ok(GameDetail {
         id,
         appid,
@@ -266,6 +212,7 @@ pub fn game_detail(id: i64, recent_limit: Option<i64>) -> Result<GameDetail, Str
         average_session_seconds,
         average_session_formatted: format_duration(average_session_seconds),
         recent_sessions: sessions,
+        accent_color,
     })
 }
 
@@ -283,6 +230,7 @@ pub fn hide_game(game_id: i64) -> Result<(), String> {
         return Err("Game not found".to_string());
     }
 
+    request_process_match_index_refresh();
     Ok(())
 }
 
@@ -327,6 +275,7 @@ pub fn restore_hidden_game(game_id: i64) -> Result<(), String> {
         return Err("Hidden game not found".to_string());
     }
 
+    request_process_match_index_refresh();
     Ok(())
 }
 
@@ -374,6 +323,7 @@ pub fn delete_game(game_id: i64) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     transaction.commit().map_err(|e| e.to_string())?;
+    request_process_match_index_refresh();
     Ok(())
 }
 
@@ -491,6 +441,7 @@ pub fn create_manual_game(app: AppHandle, request: CreateManualGameRequest) -> R
             ],
         )
         .map_err(|e| e.to_string())?;
+        request_process_match_index_refresh();
         return Ok(game_id);
     }
 
@@ -522,6 +473,7 @@ pub fn create_manual_game(app: AppHandle, request: CreateManualGameRequest) -> R
     )
     .map_err(|e| e.to_string())?;
 
+    request_process_match_index_refresh();
     Ok(conn.last_insert_rowid())
 }
 
@@ -551,6 +503,37 @@ pub fn delete_game_session(session_id: i64) -> Result<(), String> {
     transaction.commit().map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+/// Delete all finished play sessions (DOIT.md §8 Data → Clear Local History).
+/// The game library is kept; a session that is still running is kept too.
+/// Returns the number of sessions deleted.
+#[tauri::command]
+pub fn clear_play_history() -> Result<i64, String> {
+    let mut conn = get_db_connection()?;
+    let transaction = conn.transaction().map_err(|e| e.to_string())?;
+
+    let game_ids: Vec<i64> = {
+        let mut stmt = transaction
+            .prepare("SELECT DISTINCT game_id FROM game_sessions WHERE end_time IS NOT NULL")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+
+    let deleted = transaction
+        .execute("DELETE FROM game_sessions WHERE end_time IS NOT NULL", [])
+        .map_err(|e| e.to_string())?;
+
+    for game_id in game_ids {
+        recompute_game_stats(&transaction, game_id)?;
+    }
+
+    transaction.commit().map_err(|e| e.to_string())?;
+    Ok(deleted as i64)
 }
 
 fn recompute_game_stats(transaction: &Transaction<'_>, game_id: i64) -> Result<(), String> {

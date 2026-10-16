@@ -1,12 +1,20 @@
 use rusqlite::{Connection, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, SystemTime};
-use sysinfo::System;
+use std::time::{Duration, Instant, SystemTime};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 use crate::storage::db::get_db_path;
+use crate::system::settings::{
+    hydrate_runtime_settings, process_scan_intervals, settings_runtime_generation,
+};
+
+const MATCH_RELOAD_INTERVAL: Duration = Duration::from_secs(60);
+
+static PROCESS_MATCH_INDEX_REFRESH_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone)]
 pub struct GameSession {
@@ -26,7 +34,10 @@ pub struct ProcessWatcher {
     db_path: PathBuf,
     game_matches: Arc<Mutex<Vec<GameProcessMatch>>>,
     active_sessions: Arc<Mutex<HashMap<i32, GameSession>>>,
-    scan_interval: Duration,
+}
+
+pub fn request_process_match_index_refresh() {
+    PROCESS_MATCH_INDEX_REFRESH_GENERATION.fetch_add(1, Ordering::Release);
 }
 
 impl ProcessWatcher {
@@ -50,7 +61,6 @@ impl ProcessWatcher {
             db_path: db_path.to_path_buf(),
             game_matches: Arc::new(Mutex::new(Vec::new())),
             active_sessions: Arc::new(Mutex::new(HashMap::new())),
-            scan_interval: Duration::from_secs(5),
         })
     }
 
@@ -95,7 +105,7 @@ impl ProcessWatcher {
             {
                 matches.push(GameProcessMatch {
                     game_id,
-                    path: PathBuf::from(executable_path),
+                    path: ProcessWatcher::normalize_path_for_match(&PathBuf::from(executable_path)),
                     exact: true,
                 });
                 continue;
@@ -104,7 +114,7 @@ impl ProcessWatcher {
             if let Some(install_path) = install_path.filter(|value| !value.trim().is_empty()) {
                 matches.push(GameProcessMatch {
                     game_id,
-                    path: PathBuf::from(install_path),
+                    path: ProcessWatcher::normalize_path_for_match(&PathBuf::from(install_path)),
                     exact: false,
                 });
             }
@@ -171,20 +181,61 @@ impl ProcessWatcher {
         let db_path = self.db_path.clone();
         let game_matches = self.game_matches.clone();
         let active_sessions = self.active_sessions.clone();
-        let scan_interval = self.scan_interval;
 
         thread::spawn(move || {
-            let mut system = System::new_all();
+            let mut system = System::new();
+            // A process's executable never changes: ask the OS for it once per process.
+            let refresh_kind = ProcessRefreshKind::nothing()
+                .with_exe(UpdateKind::OnlyIfNotSet)
+                .without_tasks();
+            // pid -> (exe as reported, normalised exe). Normalising canonicalises the path
+            // (a filesystem call), so it is done once per process, not on every scan.
+            let mut exe_cache: HashMap<Pid, (PathBuf, PathBuf)> = HashMap::new();
+            let mut last_match_reload = Instant::now();
+            let mut observed_refresh_generation =
+                PROCESS_MATCH_INDEX_REFRESH_GENERATION.load(Ordering::Acquire);
+            let mut observed_settings_generation = settings_runtime_generation();
+            let mut fast_idle_checks_remaining = 0_u8;
+            let (mut idle_scan_seconds, mut active_scan_seconds) = process_scan_intervals();
 
             loop {
-                ProcessWatcher::check_processes(
+                let current_refresh_generation =
+                    PROCESS_MATCH_INDEX_REFRESH_GENERATION.load(Ordering::Acquire);
+                let should_reload_matches = last_match_reload.elapsed() >= MATCH_RELOAD_INTERVAL
+                    || current_refresh_generation != observed_refresh_generation;
+
+                let has_active_sessions = ProcessWatcher::check_processes(
                     &db_path,
                     &game_matches,
                     &active_sessions,
                     &mut system,
+                    &mut exe_cache,
+                    refresh_kind,
+                    should_reload_matches,
                 );
 
-                thread::sleep(scan_interval);
+                if should_reload_matches {
+                    last_match_reload = Instant::now();
+                    observed_refresh_generation = current_refresh_generation;
+                }
+
+                let current_settings_generation = settings_runtime_generation();
+                if current_settings_generation != observed_settings_generation {
+                    (idle_scan_seconds, active_scan_seconds) = process_scan_intervals();
+                    observed_settings_generation = current_settings_generation;
+                }
+
+                let next_interval = if has_active_sessions {
+                    fast_idle_checks_remaining = 2;
+                    Duration::from_secs(active_scan_seconds as u64)
+                } else if fast_idle_checks_remaining > 0 {
+                    fast_idle_checks_remaining -= 1;
+                    Duration::from_secs(active_scan_seconds as u64)
+                } else {
+                    Duration::from_secs(idle_scan_seconds as u64)
+                };
+
+                thread::sleep(next_interval);
             }
         });
     }
@@ -194,20 +245,27 @@ impl ProcessWatcher {
         game_matches: &Arc<Mutex<Vec<GameProcessMatch>>>,
         active_sessions: &Arc<Mutex<HashMap<i32, GameSession>>>,
         system: &mut System,
-    ) {
-        system.refresh_all();
+        exe_cache: &mut HashMap<Pid, (PathBuf, PathBuf)>,
+        refresh_kind: ProcessRefreshKind,
+        should_reload_matches: bool,
+    ) -> bool {
+        system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind);
 
-        let conn = match ProcessWatcher::open_connection(db_path) {
-            Ok(conn) => conn,
-            Err(error) => {
-                println!("[Process Watcher] Failed to open database: {}", error);
-                return;
+        if should_reload_matches {
+            match ProcessWatcher::open_connection(db_path)
+                .and_then(|conn| ProcessWatcher::load_game_process_matches(&conn))
+            {
+                Ok(next_matches) => {
+                    let mut game_matches = game_matches.lock().unwrap();
+                    *game_matches = next_matches;
+                }
+                Err(error) => {
+                    println!(
+                        "[Process Watcher] Failed to refresh game process match index: {}",
+                        error
+                    );
+                }
             }
-        };
-
-        if let Ok(next_matches) = ProcessWatcher::load_game_process_matches(&conn) {
-            let mut game_matches = game_matches.lock().unwrap();
-            *game_matches = next_matches;
         }
 
         let indexed_matches = {
@@ -216,13 +274,32 @@ impl ProcessWatcher {
         };
 
         let mut running_games = HashSet::new();
-        for process in system.processes().values() {
-            if let Some(exe_path) = process.exe() {
-                for rule in &indexed_matches {
-                    if ProcessWatcher::path_matches(exe_path, rule) {
-                        running_games.insert(rule.game_id);
-                        break;
-                    }
+        let processes = system.processes();
+        // Forget processes that have exited (and keep the cache bounded).
+        exe_cache.retain(|pid, _| processes.contains_key(pid));
+        if !indexed_matches.is_empty() {
+            for (pid, process) in processes {
+                let Some(exe_path) = process.exe() else {
+                    continue;
+                };
+                let cached = exe_cache.entry(*pid).or_insert_with(|| {
+                    (
+                        exe_path.to_path_buf(),
+                        ProcessWatcher::normalize_path_for_match(exe_path),
+                    )
+                });
+                // A reused pid belongs to a different program: normalise again.
+                if cached.0 != exe_path {
+                    *cached = (
+                        exe_path.to_path_buf(),
+                        ProcessWatcher::normalize_path_for_match(exe_path),
+                    );
+                }
+                if let Some(rule) = indexed_matches
+                    .iter()
+                    .find(|rule| ProcessWatcher::normalized_path_matches(&cached.1, rule))
+                {
+                    running_games.insert(rule.game_id);
                 }
             }
         }
@@ -242,6 +319,26 @@ impl ProcessWatcher {
                 .collect::<Vec<_>>();
 
             (new_games, ended_game_ids)
+        };
+
+        if new_games.is_empty() && ended_game_ids.is_empty() {
+            return !running_games.is_empty()
+                || active_sessions
+                    .lock()
+                    .map(|sessions| !sessions.is_empty())
+                    .unwrap_or(false);
+        }
+
+        let conn = match ProcessWatcher::open_connection(db_path) {
+            Ok(conn) => conn,
+            Err(error) => {
+                println!("[Process Watcher] Failed to open database: {}", error);
+                return !running_games.is_empty()
+                    || active_sessions
+                        .lock()
+                        .map(|sessions| !sessions.is_empty())
+                        .unwrap_or(false);
+            }
         };
 
         for game_id in new_games {
@@ -287,16 +384,19 @@ impl ProcessWatcher {
         for session in ended_sessions {
             ProcessWatcher::end_session(&conn, session);
         }
+
+        active_sessions
+            .lock()
+            .map(|sessions| !sessions.is_empty())
+            .unwrap_or(false)
     }
 
-    fn path_matches(exe_path: &Path, rule: &GameProcessMatch) -> bool {
-        let exe = ProcessWatcher::normalize_path_for_match(exe_path);
-        let target = ProcessWatcher::normalize_path_for_match(&rule.path);
-
+    /// `exe` must already be normalised with `normalize_path_for_match`.
+    fn normalized_path_matches(exe: &Path, rule: &GameProcessMatch) -> bool {
         if rule.exact {
-            exe == target
+            exe == rule.path
         } else {
-            exe.starts_with(&target)
+            exe.starts_with(&rule.path)
         }
     }
 
@@ -405,6 +505,12 @@ impl ProcessWatcher {
 #[tauri::command]
 pub fn start_process_monitor() -> Result<(), String> {
     let db_path = get_db_path()?;
+    if let Err(error) = hydrate_runtime_settings() {
+        println!(
+            "[Process Watcher] Failed to load process scan interval settings, using defaults: {}",
+            error
+        );
+    }
 
     match ProcessWatcher::new(&db_path) {
         Ok(mut watcher) => {

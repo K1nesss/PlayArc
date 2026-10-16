@@ -1,3 +1,3 @@
-mod commands;
+mod overview;
 
-pub use commands::analytics_snapshot;
+pub use overview::analytics_overview;

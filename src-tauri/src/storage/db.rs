@@ -1,11 +1,12 @@
 use base64::{engine::general_purpose, Engine as _};
 use rusqlite::{Connection, Result};
 use std::env;
+use std::fs::copy;
 use std::fs::create_dir_all;
 use std::fs::{read, remove_file, write};
 use std::path::PathBuf;
 
-const APP_DATA_DIR_NAME: &str = "Velaris";
+const APP_DATA_DIR_NAME: &str = "PlayArc";
 const EMBEDDED_SCHEMA_SQL: &str = include_str!("schema.sql");
 
 #[tauri::command]
@@ -204,21 +205,49 @@ pub fn import_database(base64_data: String) -> Result<(), String> {
 }
 
 pub fn get_db_path() -> Result<PathBuf, String> {
-    if cfg!(debug_assertions) {
-        // Dev/test builds should use a project-local database for easier debugging.
-        let project_db_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("playtime-tracker.db");
-        return Ok(project_db_path);
-    }
-
     let base_dir = resolve_app_data_dir()?;
     let app_dir = base_dir.join(APP_DATA_DIR_NAME);
 
     create_dir_all(&app_dir).map_err(|e| format!("Failed to create app data directory: {}", e))?;
 
-    Ok(app_dir.join("playtime-tracker.db"))
+    let db_path = app_dir.join("playtime-tracker.db");
+    if cfg!(debug_assertions) {
+        migrate_project_database_to_user_data(&db_path);
+    }
+
+    Ok(db_path)
 }
 
-fn resolve_app_data_dir() -> Result<PathBuf, String> {
+fn migrate_project_database_to_user_data(target_db_path: &PathBuf) {
+    if target_db_path.exists() {
+        return;
+    }
+
+    let project_db_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("playtime-tracker.db");
+    if !project_db_path.exists() {
+        return;
+    }
+
+    if let Err(error) = copy(&project_db_path, target_db_path) {
+        eprintln!(
+            "Failed to migrate project database {} to {}: {}",
+            project_db_path.display(),
+            target_db_path.display(),
+            error
+        );
+        return;
+    }
+
+    for suffix in ["wal", "shm"] {
+        let source = PathBuf::from(format!("{}-{}", project_db_path.display(), suffix));
+        let target = PathBuf::from(format!("{}-{}", target_db_path.display(), suffix));
+        if source.exists() {
+            let _ = copy(source, target);
+        }
+    }
+}
+
+pub fn resolve_app_data_dir() -> Result<PathBuf, String> {
     if cfg!(target_os = "windows") {
         if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
             return Ok(PathBuf::from(local_app_data));
@@ -354,6 +383,24 @@ fn ensure_database_migrations(conn: &Connection) -> Result<(), String> {
         );",
     )
     .map_err(|e| format!("Failed to ensure steam_media_failures table: {}", e))?;
+
+    let has_accent_color = conn
+        .prepare("SELECT accent_color FROM games LIMIT 0")
+        .is_ok();
+
+    if !has_accent_color {
+        // NULL = not computed yet; '' = no usable color. See api/common/accent.rs.
+        conn.execute("ALTER TABLE games ADD COLUMN accent_color TEXT", [])
+            .map_err(|e| format!("Failed to add games.accent_color column: {}", e))?;
+    }
+
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS app_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );",
+    )
+    .map_err(|e| format!("Failed to ensure app_meta table: {}", e))?;
 
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS ignored_games (

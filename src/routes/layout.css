@@ -1,471 +1,162 @@
 @import 'tailwindcss';
+@import '../lib/styles/tokens.css';
 
-/* Tailwind v4: 使用 class 驱动 dark 模式（而不是仅跟随系统主题） */
+/* Tailwind v4: class-driven dark mode */
 @custom-variant dark (&:where(.dark, .dark *));
 
-:root {
-	--md-bg: #f4f7fb;
-	--md-surface: #ffffff;
-	--md-surface-2: #f7f9fc;
-	--md-outline: #d8e1ee;
-	--md-primary: #2563eb;
-	--md-on-primary: #ffffff;
-	--md-text: #172033;
-	--md-text-muted: #64748b;
-	--md-radius-xl: 16px;
-	--md-radius-lg: 12px;
-	--md-elevation-1: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.06);
-	--md-elevation-2: 0 2px 6px rgba(15, 23, 42, 0.08), 0 14px 32px rgba(15, 23, 42, 0.09);
-	--pt-accent: #0891b2;
-	--pt-accent-soft: #e0f7ff;
-	--pt-success: #059669;
-	--pt-warning: #d97706;
-	--pt-danger: #dc2626;
-	--pt-hover: #eef4ff;
-	--pt-control: #ffffff;
-	--pt-control-hover: #f1f5f9;
-	--theme-duration: 170ms;
-	--theme-ease: ease-out;
-	--theme-color-transition:
-		background-color var(--theme-duration) var(--theme-ease),
-		border-color var(--theme-duration) var(--theme-ease),
-		color var(--theme-duration) var(--theme-ease), fill var(--theme-duration) var(--theme-ease),
-		stroke var(--theme-duration) var(--theme-ease),
-		box-shadow var(--theme-duration) var(--theme-ease);
-}
+/*
+ * Global styles only: base, app shell, page scaffolding, motion preferences.
+ * Everything visual beyond this lives in components (src/lib/components/ui)
+ * and reads from tokens (src/lib/styles/tokens.css).
+ */
 
-.dark {
-	--md-bg: #0e121a;
-	--md-surface: #151b26;
-	--md-surface-2: #101722;
-	--md-outline: #273247;
-	--md-primary: #7aa7ff;
-	--md-on-primary: #0d1a38;
-	--md-text: #e5e7eb;
-	--md-text-muted: #9aa7bc;
-	--md-elevation-1: 0 1px 2px rgba(2, 6, 23, 0.42), 0 12px 26px rgba(2, 6, 23, 0.26);
-	--md-elevation-2: 0 4px 10px rgba(2, 6, 23, 0.46), 0 18px 38px rgba(2, 6, 23, 0.34);
-	--pt-accent: #22d3ee;
-	--pt-accent-soft: #0b2e3a;
-	--pt-success: #34d399;
-	--pt-warning: #fbbf24;
-	--pt-danger: #f87171;
-	--pt-hover: rgba(122, 167, 255, 0.12);
-	--pt-control: #151b26;
-	--pt-control-hover: #1b2433;
-}
+/* ------------------------------------------------------------------ */
+/* Base                                                               */
+/* ------------------------------------------------------------------ */
 
 html,
 body {
-	font-family: 'Inter', 'Segoe UI', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
-	background: var(--md-bg);
-	color: var(--md-text);
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	overflow: hidden;
+	font-family: var(--font-sans);
+	font-size: var(--text-base);
+	line-height: var(--text-base--line-height);
+	background: var(--bg-app);
+	color: var(--text-primary);
 	-webkit-font-smoothing: antialiased;
-	text-rendering: geometricPrecision;
 }
 
-.material-main {
-	background:
-		linear-gradient(
-			180deg,
-			color-mix(in oklab, var(--md-bg) 92%, var(--md-surface)) 0%,
-			var(--md-bg) 240px
-		),
-		var(--md-bg);
-	color: var(--md-text);
-	transition: var(--theme-color-transition);
+/* §14 numeric values */
+.tabular-nums {
+	font-variant-numeric: tabular-nums;
 }
 
-.material-page h1,
-.material-page h2,
-.material-page h3 {
-	letter-spacing: 0.012em;
-	line-height: 1.22;
+/* §15 Lucide icons — uniform stroke */
+svg.lucide {
+	stroke-width: var(--icon-stroke);
 }
 
-.material-page p {
-	line-height: 1.45;
+/* §31 Focus — never suppressed globally; keyboard focus always visible */
+:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
 }
+
+::selection {
+	background: var(--accent-soft);
+}
+
+/* Thin, quiet scrollbars: visible enough to show a page scrolls. */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-strong) transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* App shell (§9, §12, §13)                                           */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Chrome (sidebar + title bar) sits on --shell-chrome-bg. With Mica (Windows 11)
+ * it is transparent and the native backdrop shows through; otherwise it is the
+ * solid sidebar color. Page content is always an opaque layer on top.
+ */
+:root {
+	--shell-chrome-bg: var(--bg-sidebar-solid);
+}
+
+html.has-mica,
+html.has-mica body {
+	background: transparent;
+}
+
+html.has-mica {
+	--shell-chrome-bg: transparent;
+}
+
+.app-shell {
+	display: flex;
+	width: 100%;
+	height: 100vh;
+	background: var(--shell-chrome-bg);
+	color: var(--text-primary);
+	transition: background-color var(--duration-normal) var(--ease-standard);
+}
+
+.shell-column {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.shell-content {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	border-top: 1px solid var(--border-subtle);
+	border-left: 1px solid var(--border-subtle);
+	border-top-left-radius: var(--radius-lg);
+	background: var(--bg-app);
+	transition: background-color var(--duration-normal) var(--ease-standard);
+}
+
+.back-to-top-button {
+	transition:
+		background-color var(--duration-fast) var(--ease-standard),
+		color var(--duration-fast) var(--ease-standard),
+		transform var(--duration-normal) var(--ease-standard),
+		opacity var(--duration-normal) var(--ease-standard);
+}
+
+/* ------------------------------------------------------------------ */
+/* Page scaffolding                                                   */
+/* ------------------------------------------------------------------ */
 
 .app-page {
 	min-height: 100%;
-	padding: 34px 16px 16px;
-}
-
-@media (min-width: 768px) {
-	.app-page {
-		padding: 42px 28px 32px;
-	}
+	/* Same content width whether or not the page scrolls (titles never shift). */
+	scrollbar-gutter: stable;
+	padding: var(--page-padding-y) var(--page-padding-x) var(--space-6);
 }
 
 .app-page-inner {
 	margin-inline: auto;
-	max-width: 1360px;
+	max-width: var(--content-max-width);
 }
 
 .page-header {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
-	gap: 16px;
+	gap: var(--space-4);
 	min-height: 44px;
-	margin-bottom: 20px;
+	margin-bottom: var(--space-5);
 }
 
 .page-header > :first-child {
 	min-width: 0;
 }
 
-.page-header > :not(:first-child):last-child {
-	margin-left: auto;
-}
-
-@media (min-width: 1024px) {
-	.page-header {
-		flex-wrap: nowrap;
-	}
-}
-
 .page-title {
-	font-size: 24px;
-	font-weight: 700;
-	line-height: 1.16;
-	color: var(--md-text);
-	letter-spacing: 0;
+	font-size: var(--text-2xl);
+	font-weight: 600;
+	line-height: var(--text-2xl--line-height);
+	color: var(--text-primary);
 }
 
 .page-subtitle {
-	margin-top: 6px;
-	max-width: 680px;
-	font-size: 14px;
-	color: var(--md-text-muted);
+	margin-top: var(--space-1);
+	font-size: var(--text-sm);
+	color: var(--text-secondary);
 }
 
-.surface-card {
-	border: 1px solid var(--md-outline);
-	border-radius: var(--md-radius-xl);
-	background: var(--md-surface);
-	box-shadow: var(--md-elevation-1);
-	transition:
-		var(--theme-color-transition),
-		transform 150ms ease;
-}
-
-.subtle-panel {
-	border: 1px solid color-mix(in oklab, var(--md-outline) 78%, transparent);
-	border-radius: var(--md-radius-lg);
-	background: var(--md-surface-2);
-	transition: var(--theme-color-transition);
-}
-
-.metric-card {
-	position: relative;
-	overflow: hidden;
-	border: 1px solid var(--md-outline);
-	border-radius: var(--md-radius-xl);
-	background: var(--md-surface);
-	box-shadow: var(--md-elevation-1);
-	transition:
-		var(--theme-color-transition),
-		transform 150ms ease;
-}
-
-.metric-card::before {
-	content: '';
-	position: absolute;
-	inset-block: 0;
-	inset-inline-start: 0;
-	width: 3px;
-	background: linear-gradient(180deg, var(--md-primary), var(--pt-accent));
-}
-
-.eyebrow {
-	font-size: 11px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.12em;
-	color: var(--md-text-muted);
-}
-
-.metric-value {
-	font-variant-numeric: tabular-nums;
-	letter-spacing: 0;
-	color: var(--md-text);
-}
-
-.toolbar {
-	display: flex;
-	width: 100%;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 10px;
-}
-
-@media (min-width: 768px) {
-	.toolbar {
-		width: auto;
-		flex-wrap: nowrap;
-	}
-}
-
-.control-input {
-	min-height: 42px;
-	border: 1px solid var(--md-outline);
-	border-radius: var(--md-radius-lg);
-	background: var(--pt-control);
-	color: var(--md-text);
-	font-size: 14px;
-	outline: none;
-	transition: var(--theme-color-transition);
-}
-
-.control-input:focus {
-	border-color: var(--md-primary);
-	box-shadow: 0 0 0 3px color-mix(in oklab, var(--md-primary) 18%, transparent);
-}
-
-.btn {
-	display: inline-flex;
-	min-height: 42px;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	border-radius: var(--md-radius-lg);
-	padding: 0 14px;
-	font-size: 14px;
-	font-weight: 600;
-	line-height: 1;
-	transition:
-		transform 120ms ease,
-		var(--theme-color-transition);
-}
-
-.btn:hover {
-	box-shadow: var(--md-elevation-1);
-}
-
-.btn:active {
-	transform: translateY(0);
-}
-
-.btn-primary {
-	border: 1px solid color-mix(in oklab, var(--md-primary) 70%, #000 0%);
-	background: var(--md-primary);
-	color: var(--md-on-primary);
-	box-shadow: 0 8px 18px color-mix(in oklab, var(--md-primary) 20%, transparent);
-}
-
-.btn-icon {
-	min-height: 42px;
-	width: 42px;
-	padding: 0;
-}
-
-.btn-secondary {
-	border: 1px solid var(--md-outline);
-	background: var(--pt-control);
-	color: var(--md-text);
-}
-
-.btn-secondary:hover {
-	background: var(--pt-control-hover);
-}
-
-.segmented-control {
-	position: relative;
-	display: inline-grid;
-	grid-template-columns: repeat(var(--segmented-count, 4), minmax(0, 1fr));
-	overflow: hidden;
-	border: 1px solid var(--md-outline);
-	border-radius: var(--md-radius-lg);
-	background: var(--md-surface);
-	padding: 4px;
-	box-shadow: var(--md-elevation-1);
-	transition: var(--theme-color-transition);
-}
-
-.segmented-control-indicator {
-	position: absolute;
-	inset-block: 4px;
-	left: 4px;
-	width: calc((100% - 8px) / var(--segmented-count, 4));
-	border: 1px solid color-mix(in oklab, var(--md-primary) 26%, transparent);
-	border-radius: 8px;
-	background: color-mix(in oklab, var(--md-primary) 12%, var(--md-surface));
-	transform: translateX(calc(var(--segmented-index, 0) * 100%));
-	transition:
-		transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
-		background-color var(--theme-duration) var(--theme-ease),
-		border-color var(--theme-duration) var(--theme-ease),
-		box-shadow var(--theme-duration) var(--theme-ease);
-}
-
-.segmented-control-button {
-	position: relative;
-	z-index: 1;
-	display: inline-flex;
-	min-height: 32px;
-	align-items: center;
-	justify-content: center;
-	border-radius: 8px;
-	padding: 0 14px;
-	font-size: 14px;
-	font-weight: 600;
-	line-height: 1;
-	white-space: nowrap;
-	transition:
-		color var(--theme-duration) var(--theme-ease),
-		transform 180ms ease;
-}
-
-.segmented-control-button-active {
-	color: var(--md-primary);
-}
-
-.segmented-control-button-inactive {
-	color: var(--md-text-muted);
-}
-
-.segmented-control-button-inactive:hover {
-	color: var(--md-text);
-}
-
-.status-message {
-	border-radius: var(--md-radius-lg);
-	border: 1px solid var(--md-outline);
-	background: var(--md-surface);
-	padding: 12px 14px;
-	font-size: 14px;
-	color: var(--md-text-muted);
-	transition: var(--theme-color-transition);
-}
-
-.empty-state {
-	border: 1px dashed color-mix(in oklab, var(--md-outline) 85%, var(--md-text-muted));
-	border-radius: var(--md-radius-xl);
-	background: color-mix(in oklab, var(--md-surface-2) 86%, transparent);
-	padding: 40px 24px;
-	text-align: center;
-	color: var(--md-text-muted);
-	transition: var(--theme-color-transition);
-}
-
-.table-shell {
-	overflow: hidden;
-	border: 1px solid var(--md-outline);
-	border-radius: var(--md-radius-xl);
-	background: var(--md-surface);
-	box-shadow: var(--md-elevation-1);
-	transition: var(--theme-color-transition);
-}
-
-.material-page .rounded-xl,
-.material-page .rounded-2xl {
-	border-radius: var(--md-radius-xl);
-}
-
-.material-page [class*='bg-white'] {
-	background: var(--md-surface);
-	border-color: var(--md-outline);
-	box-shadow: var(--md-elevation-1);
-	backdrop-filter: none;
-}
-
-.material-page [class*='dark:bg-[#151926]'],
-.material-page [class*='dark:bg-[#101522]'],
-.material-page [class*='dark:bg-[#0f1320]'] {
-	background: var(--md-surface);
-}
-
-.material-page input[type='text'],
-.material-page input[type='password'],
-.material-page input[type='number'],
-.material-page select {
-	border-radius: var(--md-radius-lg);
-	border-color: var(--md-outline);
-	background: var(--md-surface);
-	min-height: 42px;
-	box-shadow: inset 0 0 0 1px transparent;
-	transition: var(--theme-color-transition);
-}
-
-.material-page input[type='text']:focus,
-.material-page input[type='password']:focus,
-.material-page input[type='number']:focus,
-.material-page select:focus {
-	border-color: var(--md-primary);
-	box-shadow: 0 0 0 3px color-mix(in oklab, var(--md-primary) 18%, transparent);
-	outline: none;
-}
-
-.material-page button {
-	border-radius: var(--md-radius-lg);
-	font-weight: 500;
-	letter-spacing: 0.01em;
-	transition:
-		transform 0.12s ease,
-		var(--theme-color-transition);
-}
-
-.material-page button:hover {
-	box-shadow: var(--md-elevation-1);
-	transform: none;
-}
-
-.material-page button:active {
-	transform: translateY(0);
-	box-shadow: var(--md-elevation-1);
-}
-
-.data-label {
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--md-text-muted);
-}
-
-.data-value {
-	font-variant-numeric: tabular-nums;
-	font-size: 14px;
-	font-weight: 700;
-	color: var(--md-text);
-}
-
-.quiet-chip {
-	display: inline-flex;
-	align-items: center;
-	border: 1px solid var(--md-outline);
-	border-radius: 999px;
-	background: var(--md-surface-2);
-	padding: 3px 9px;
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--md-text-muted);
-	transition: var(--theme-color-transition);
-}
-
-.material-page :where(.transition-colors, .transition) {
-	transition:
-		var(--theme-color-transition),
-		transform 150ms ease,
-		opacity 150ms ease;
-}
-
-.theme-transition-surface {
-	transition: var(--theme-color-transition);
-}
-
-.back-to-top-button {
-	transition:
-		var(--theme-color-transition),
-		transform 200ms ease,
-		opacity 200ms ease;
-}
-
-:focus-visible {
-	outline: 2px solid color-mix(in oklab, var(--md-primary) 75%, white);
-	outline-offset: 2px;
-}
+/* ------------------------------------------------------------------ */
+/* Motion preferences (§32)                                           */
+/* ------------------------------------------------------------------ */
 
 html.animations-disabled *,
 html.animations-disabled *::before,
@@ -485,72 +176,4 @@ html.animations-disabled *::after {
 		scroll-behavior: auto !important;
 		transition-duration: 0.01ms !important;
 	}
-}
-
-.material-page .md-tonal {
-	background: color-mix(in oklab, var(--md-primary) 10%, var(--md-surface));
-	border-color: color-mix(in oklab, var(--md-primary) 28%, var(--md-outline));
-	color: color-mix(in oklab, var(--md-primary) 80%, var(--md-text));
-}
-
-.material-page .md-chip {
-	border-radius: 999px;
-	padding: 2px 10px;
-	font-size: 12px;
-	font-weight: 500;
-	background: color-mix(in oklab, var(--md-primary) 12%, var(--md-surface));
-	color: color-mix(in oklab, var(--md-primary) 82%, var(--md-text));
-	border: 1px solid color-mix(in oklab, var(--md-primary) 24%, var(--md-outline));
-}
-
-html,
-body,
-* {
-	scrollbar-width: none;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar,
-*::-webkit-scrollbar {
-	width: 0;
-	height: 0;
-}
-
-@keyframes skeleton-shimmer {
-	100% {
-		transform: translateX(100%);
-	}
-}
-
-.skeleton-shimmer {
-	position: relative;
-	overflow: hidden;
-	background-color: #e2e8f0;
-}
-
-.dark .skeleton-shimmer {
-	background-color: #1f2937;
-}
-
-.skeleton-shimmer::after {
-	content: '';
-	position: absolute;
-	inset: 0;
-	transform: translateX(-100%);
-	background-image: linear-gradient(
-		90deg,
-		transparent 0%,
-		rgba(255, 255, 255, 0.7) 50%,
-		transparent 100%
-	);
-	animation: skeleton-shimmer 1.4s ease-in-out infinite;
-}
-
-.dark .skeleton-shimmer::after {
-	background-image: linear-gradient(
-		90deg,
-		transparent 0%,
-		rgba(148, 163, 184, 0.2) 50%,
-		transparent 100%
-	);
 }

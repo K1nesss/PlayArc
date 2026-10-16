@@ -1,20 +1,20 @@
 <p align="center">
-  <img src="./icon_full.png" width="180" alt="Velaris" />
+  <img src="./icon.png" width="160" alt="PlayArc" />
 </p>
 
-<h1 align="center">Velaris</h1>
+<h1 align="center">PlayArc</h1>
 
 <p align="center">
-  一个面向 Windows 桌面端的游戏时长追踪工具。扫描游戏库、监听游戏进程、记录游玩会话，并用清晰的仪表盘、时间线和统计视图展示你的游戏习惯。
+  一个面向 Windows 桌面端的本地游戏时长追踪工具。自动识别游戏、记录每一次游玩，并用首页、时间线和分析视图展示你的游戏习惯。所有数据只保存在本机。
 </p>
 
 <p align="center">
-  <a href="https://github.com/K1nesss/Velaris/releases/latest">
-    <img alt="Latest release" src="https://img.shields.io/github/v/release/K1nesss/Velaris?style=flat-square&label=release" />
+  <a href="https://github.com/K1nesss/PlayArc/releases/latest">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/K1nesss/PlayArc?style=flat-square&label=release" />
   </a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-2563eb?style=flat-square" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-v2-24c8db?style=flat-square" />
-  <img alt="SvelteKit" src="https://img.shields.io/badge/SvelteKit-TypeScript-ff3e00?style=flat-square" />
+  <img alt="SvelteKit" src="https://img.shields.io/badge/SvelteKit-Svelte%205-ff3e00?style=flat-square" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-backend-b7410e?style=flat-square" />
 </p>
 
@@ -29,348 +29,248 @@
   ·
   <a href="#使用教程">教程</a>
   ·
-  <a href="#开发">开发</a>
+  <a href="#常见问题">常见问题</a>
   ·
-  <a href="#贡献">贡献</a>
+  <a href="#开发">开发</a>
 </p>
 
 ## 功能概览
 
-- 自动扫描 Steam 已安装游戏，并同步游戏图标、库封面和详情页背景图。
-- 支持手动添加游戏，可选择 exe、自动识别名称和图标，也可自定义封面与背景图。
-- 自动监听游戏进程，记录开始时间、结束时间和本次游玩时长。
-- Timeline 展示每条游戏记录，游戏头像优先使用已缓存的 Steam icon。
-- 游戏库支持封面展示、详情页、隐藏、删除和恢复隐藏游戏。
-- 游戏详情页支持查看游戏信息、背景图、游玩记录和记录删除。
-- Dashboard 展示总时长、最近游玩、当前正在运行的游戏和趋势图。
-- Analytics 展示不同时间区间下的游玩统计。
-- 设置页支持主题、动效、刷新间隔、默认统计区间、更新检查等配置。
-- 支持应用内更新提醒和一键更新。
-- 支持本地数据导入导出，方便备份和迁移。
+- **自动记录**：后台监听游戏进程，自动记录每次游玩的开始、结束和时长；关闭窗口后可继续在托盘中记录。
+- **首页**：正在游玩的游戏与本次时长、最近游玩、今日时长，一眼看清当前状态。
+- **游戏库**：Steam 已安装游戏自动出现，支持手动添加非 Steam 游戏、搜索、排序、只看已安装，以及网格 / 列表两种视图。
+- **游戏详情**：总时长、会话统计（平均 / 中位 / 最长）、近 30 天趋势、常玩时段和完整游玩记录。
+- **时间线**：按月、按天浏览每一次游玩会话，跨午夜的会话会正确拆分到每一天。
+- **分析**：7 天 / 30 天 / 90 天 / 1 年 / 全部区间，含游玩趋势、时段分布、活跃热力图、游戏排行和会话时长分布。
+- **Steam 同步**：同步游戏图标、封面和详情页背景图，可在后台定期自动同步。
+- **外观**：浅色 / 深色主题，Windows 11 上支持原生 Mica 材质，界面支持中文和英文。
+- **本地数据**：数据库与图片缓存只保存在本机，支持数据导入导出。
+- **开机启动与托盘**：可随 Windows 启动并直接进入托盘，托盘菜单显示当前正在玩的游戏。
+- **应用内更新**：发现新版本时提醒，一键更新。
 
 ## 界面预览
 
-### Dashboard
+### 首页
 
-<img src="./docs/img/dashboard.png" alt="Dashboard" />
+<img src="./docs/img/home.png" alt="首页" />
 
-### Dark Theme
+### 深色主题
 
-<img src="./docs/img/dark.png" alt="Dark theme dashboard" />
+<img src="./docs/img/dark.png" alt="深色主题" />
 
 ### 游戏库
 
-<img src="./docs/img/games.png" alt="Games library" />
+<img src="./docs/img/games.png" alt="游戏库" />
 
 ### 游戏详情
 
-<img src="./docs/img/game-details.png" alt="Game details" />
+<img src="./docs/img/game-details.png" alt="游戏详情" />
 
-### Timeline
+### 时间线
 
-<img src="./docs/img/timelines.png" alt="Timeline" />
+<img src="./docs/img/timelines.png" alt="时间线" />
 
-### Analytics
+### 分析
 
-<img src="./docs/img/analysis.png" alt="Analytics" />
+<img src="./docs/img/analysis.png" alt="分析" />
 
 ### 设置
 
-<img src="./docs/img/settings.png" alt="Settings" />
+<img src="./docs/img/settings.png" alt="设置" />
 
 ## 安装
 
 最新安装包在 GitHub Releases：
 
 ```text
-https://github.com/K1nesss/Velaris/releases/latest
+https://github.com/K1nesss/PlayArc/releases/latest
 ```
 
-Windows 用户优先下载：
+Windows 用户下载 `PlayArc_<版本号>_x64-setup.exe` 并运行即可。首次启动时，如果系统提示安全确认，请确认安装包来自本仓库的 Release。
 
-```text
-Velaris_0.1.0_x64-setup.exe
-```
+### 从 Velaris 升级
 
-安装后正常启动 Velaris。首次启动时，如果系统提示安全确认，请确认来源是本仓库 Release 中下载的安装包。
+PlayArc 是 Velaris 的新名字。首次启动 PlayArc 时，会自动把 Velaris 的数据库和设置复制到新的数据目录，原有数据不会被修改或删除。由于应用名称变化，Windows 可能会把 PlayArc 安装为一个新程序；确认数据正常后，可以在“设置 › 应用”中卸载旧的 Velaris。
 
 ## 首次配置
 
-Velaris 可以不配置 Steam API Key 直接使用基础记录功能；但如果你想同步 Steam 游戏库图标、封面、详情页背景图等媒体资源，需要在设置页填写 Steam API Key 和 Steam64 ID。
+PlayArc 不需要任何配置就能记录游戏时长。如果想同步 Steam 游戏的图标、封面和详情页背景图，需要在 **设置 › Steam** 中填写 Steam Web API Key 和 Steam64 ID。
 
 ### 获取 Steam API Key
 
-1. 打开 Steam Web API Key 页面：
-
-```text
-https://steamcommunity.com/dev/apikey
-```
-
-2. 登录你的 Steam 账号。
-3. 根据页面提示申请或查看 API Key。
-4. 如果页面要求填写 Domain Name，个人本地使用可以填写你自己的域名；没有公开域名时可按页面要求填写本地用途标识，例如 `localhost`。
-5. 复制生成的 API Key。
+1. 打开 [Steam Web API Key 页面](https://steamcommunity.com/dev/apikey) 并登录 Steam 账号。
+2. 按页面提示申请或查看 API Key。如果要求填写 Domain Name，个人本地使用可以填写 `localhost`。
+3. 复制生成的 32 位 API Key。
 
 注意：
 
-- Steam API Key 等同于访问你 Steam Web API 数据的凭证，不要公开分享。
-- 不要把 API Key 提交到 GitHub、论坛、截图或日志里。
-- 如果怀疑泄露，回到 Steam Web API Key 页面重新生成或撤销。
-
-Steam 官方文档说明，使用 Steam Web API 需要 API Key，并且需要同意 Steam API Terms of Use。
+- API Key 是访问你 Steam Web API 数据的凭证，不要公开分享，也不要提交到 GitHub、论坛、截图或日志中。
+- 如果怀疑泄露，回到 Steam Web API Key 页面撤销并重新生成。
+- 使用 Steam Web API 需要同意 Steam API Terms of Use。
 
 ### 获取 Steam64 ID
 
-Steam64 ID 是一串 17 位左右的数字，常见格式类似：
+Steam64 ID 是以 `7656119` 开头的 17 位数字，例如 `76561198000000000`。
 
-```text
-76561198000000000
-```
+1. 打开 Steam 个人资料页，复制个人资料链接。
+2. 如果链接形如 `https://steamcommunity.com/profiles/76561198000000000`，末尾数字就是 Steam64 ID。
+3. 如果链接形如 `https://steamcommunity.com/id/yourname`（自定义 URL），可以用 [SteamID I/O](https://steamid.io/lookup/) 转换成 Steam64 ID。
 
-推荐方法：
+### 在 PlayArc 中填写
 
-1. 打开 Steam 客户端或浏览器中的 Steam 个人资料页。
-2. 复制你的个人资料链接。
-3. 如果链接类似下面这样，末尾数字就是 Steam64 ID：
+1. 打开 **设置 › Steam**。
+2. 填入 Steam Web API Key 和 Steam ID，输入格式不对时会直接提示。
+3. 点击“同步”，或开启“自动同步”让 PlayArc 在后台定期同步。
 
-```text
-https://steamcommunity.com/profiles/76561198000000000
-```
-
-4. 如果链接类似下面这样，说明你使用的是自定义 URL：
-
-```text
-https://steamcommunity.com/id/yourname
-```
-
-这种情况下可以用 Steam ID 查询工具把自定义 URL 转换成 Steam64 ID，例如：
-
-```text
-https://steamid.io/lookup/
-```
-
-也可以在拿到 Steam API Key 后，通过 Steam 的 ResolveVanityURL 接口解析自定义 URL。
-
-### 在 Velaris 中填写
-
-1. 打开 Velaris。
-2. 进入设置页。
-3. 找到 Steam 相关配置。
-4. 填入 Steam API Key。
-5. 填入 Steam64 ID。
-6. 返回游戏库或 Timeline，应用会在需要时同步 Steam 游戏信息和媒体资源。
-
-如果同步失败，优先检查：
-
-- API Key 是否复制完整。
-- Steam64 ID 是否是纯数字格式。
-- Steam 个人资料和游戏详情是否允许公开访问。
-- 当前网络是否能访问 Steam API 和 Steam 图片 CDN。
+侧边栏底部会显示 Steam 同步状态，点击即可立即同步（快捷键 `Ctrl+R`）。
 
 ## 使用教程
 
-### Dashboard
+### 首页
 
-Dashboard 用来快速查看当前整体状态：
-
-- 总游玩时长。
-- 最近一次游玩记录。
-- 今日或近期的游玩趋势。
-- 当前正在运行的游戏。
-- 最近游戏列表。
-
-如果你正在运行某个已识别游戏，Velaris 会在 Dashboard 中显示当前游玩状态。
+首页展示当前状态：正在游玩的游戏和本次已玩时长、最近一次游玩、今日游玩时长。启动任意已识别的游戏，PlayArc 会自动开始记录。
 
 ### 游戏库
 
-游戏库用于集中管理所有游戏：
-
-- Steam 扫描到的游戏会自动出现在列表中。
-- 手动添加的游戏也会出现在列表中。
-- 有 Steam 封面时优先展示封面。
-- 没有封面时使用本地兜底显示。
-- 点击游戏卡片可以进入详情页。
-
-游戏详情页中可以查看：
-
-- 游戏名称和基础信息。
-- Steam library hero 背景图。
-- 总游玩时长。
-- 最近游玩记录。
-- 单条记录删除操作。
-
-删除记录前会出现确认弹窗，避免误删。如果记录仍在进行中，需要先停止游戏，不能删除活跃记录。
+- Steam 扫描到的已安装游戏会自动出现；有 Steam 封面时优先显示封面。
+- 支持按名称搜索，按最近游玩 / 游玩时长 / 会话数 / 名称排序，以及只显示已安装的游戏。
+- 右上角可以在网格和列表视图之间切换。
+- 点击游戏进入详情页。
 
 ### 手动添加游戏
 
-如果某个游戏不是 Steam 游戏，或者暂时无法被自动扫描，可以手动添加：
+如果游戏不是 Steam 游戏，或没有被自动扫描到：
 
-1. 进入游戏库页面。
-2. 点击添加游戏。
-3. 选择游戏 exe 文件。
-4. Velaris 会尝试根据 exe 自动填写游戏名称。
-5. 图标会优先从 exe 中提取。
-6. 你可以手动修改名称。
-7. 封面和背景图可以按需选择。
-8. 保存后，Velaris 会通过进程匹配记录该游戏的游玩时长。
+1. 在游戏库页面点击“添加游戏”。
+2. 选择游戏的 exe 文件，PlayArc 会自动填写名称并提取图标。
+3. 按需修改名称，选择封面和背景图。
+4. 保存后，PlayArc 会在该程序运行时记录时长。
 
-建议选择真正启动游戏的 exe，而不是启动器、更新器或卸载程序。这样进程识别会更准确。
+建议选择真正运行游戏的 exe，而不是启动器、更新器或卸载程序，这样识别更准确。
 
-### Timeline
+### 游戏详情
 
-Timeline 展示每一次游玩会话：
+详情页展示总时长、会话次数、平均 / 中位 / 最长会话、近 30 天趋势、常玩时段和最近的游玩记录。右上角菜单可以隐藏或删除游戏；删除单条记录前会二次确认，进行中的会话不能删除。
 
-- 每条记录包含游戏、开始时间、结束时间和本次时长。
-- Steam 游戏会优先使用缓存的游戏 icon。
-- 可以按条件筛选记录。
-- 支持加载更多历史记录。
-- 单条记录可以删除，删除前会出现确认弹窗。
+### 时间线
 
-Timeline 适合回看“我什么时候玩了什么游戏”。
+时间线按月份浏览所有游玩会话，并按天分组显示当天的总时长和会话数。支持按游戏筛选和搜索；从游戏详情页的“在时间线中查看”进入时会自动筛选该游戏。
 
-### Analytics
+### 分析
 
-Analytics 用于查看统计分析：
+分析页可以选择时间区间（7 天 / 30 天 / 90 天 / 1 年 / 全部）并筛选单个游戏，包含：
 
-- 按默认时间区间查看统计。
-- 对比不同游戏的游玩占比。
-- 查看不同日期或时间段的游玩趋势。
-- 用于发现长期游玩习惯。
+- 关键指标：总时长、日均、平均会话、活跃天数。
+- 游玩趋势：每日时长与 7 日移动平均。
+- 时段分布：一周中每天每小时的游玩热力图。
+- 活跃热力图、游戏排行和会话时长分布。
 
-默认统计区间可以在设置页调整。
+默认区间可以在 **设置 › 通用** 中调整。
 
 ### 隐藏和删除游戏
 
-游戏详情页中可以隐藏或删除游戏：
+- **隐藏**：从游戏库中隐藏但保留数据，适合 Steam 工具、Dedicated Server 等不想展示的条目。
+- **删除**：移除游戏条目，操作前会确认。
 
-- 隐藏：从游戏库界面中隐藏，但保留数据，适合不想展示但以后可能恢复的游戏。
-- 删除：用于移除不想继续保留的游戏条目，操作前会确认。
-
-被隐藏的游戏可以在设置页的已隐藏游戏列表中恢复。恢复后，Velaris 会重新扫描并把游戏重新加入游戏库。
-
-如果某个 Steam 工具或 Dedicated Server 不是你想记录的游戏，建议使用隐藏。这样后续扫描时不会频繁把它展示出来，也能减少无意义图片请求。
+已隐藏的游戏可以在 **设置 › 数据** 中恢复；被忽略的 Steam 项目可以在 **设置 › Steam** 中恢复。
 
 ### 设置
 
-设置页包含常用配置：
+- **通用**：语言、开机启动、关闭时最小化到托盘、扫描间隔、首页刷新间隔、分析默认区间。
+- **外观**：主题模式、动效、侧边栏透明效果（Windows 11 Mica）、紧凑游戏列表。
+- **Steam**：API Key、Steam ID、立即同步、自动同步及间隔、重新下载全部图片、已忽略项目。
+- **数据**：导入 / 导出数据、已隐藏游戏、打开日志文件、清除游玩记录、恢复默认设置。
+- **关于**：版本信息与检查更新。
 
-- 主题模式。
-- 页面动效。
-- Dashboard 刷新间隔。
-- Timeline 每次加载条数。
-- Analytics 默认区间。
-- Steam API Key。
-- Steam64 ID。
-- 已隐藏游戏管理。
-- 检查更新。
+设置修改后会自动保存，不需要额外点击保存。
 
-大部分设置会立即生效，不需要额外点击保存。
+### 快捷键
+
+| 快捷键          | 作用                                                     |
+| --------------- | -------------------------------------------------------- |
+| `Ctrl+K`        | 打开命令面板（跳转页面、搜索游戏、同步 Steam、切换主题） |
+| `Ctrl+B`        | 展开 / 收起侧边栏（也可以点击左上角的星形图标）          |
+| `Ctrl+R` / `F5` | 刷新当前页面并同步 Steam 数据                            |
+| `Ctrl+,`        | 打开设置                                                 |
+| `Esc`           | 关闭弹窗和菜单                                           |
 
 ### 数据和缓存
 
-Velaris 会在本地保存：
+PlayArc 在本地保存以下数据：
 
-- SQLite 数据库。
-- Steam 游戏 icon 缓存。
-- Steam library 封面缓存。
-- Steam hero 背景图缓存。
-- 手动添加游戏的图标、封面和背景图。
+- SQLite 数据库、设置和窗口状态：`%LOCALAPPDATA%\PlayArc\`
+- Steam 图标、封面、背景图以及手动添加游戏的图片缓存
 
-这些数据只保存在本机。Steam API Key 和 Steam64 ID 也用于本机请求 Steam API，不应公开分享。
+这些数据只保存在本机。Steam API Key 只用于在本机请求 Steam API。
 
 ## 常见问题
 
 ### 为什么游戏库没有显示 Steam 游戏？
 
-可能原因：
+- Steam 未安装、游戏未安装，或 Steam 库路径暂时没有被扫描到。
+- 游戏已被隐藏（可在 **设置 › 数据** 中恢复）。
 
-- Steam 没有安装在默认位置。
-- Steam library 路径暂时没有被扫描到。
-- 游戏没有安装。
-- 游戏被隐藏。
-- Steam 扫描还没有重新执行。
+可以尝试重启 PlayArc。
 
-可以尝试重启 Velaris 或在恢复隐藏游戏后重新扫描。
+### Steam 同步失败怎么办？
 
-### 为什么 Steam 图标或封面没有显示？
+同步失败时，设置页会直接显示具体原因：
 
-可能原因：
+- **“Steam rejected the API key”**：API Key 无效或已撤销，请重新生成并填写。
+- **“Failed to reach Steam: could not connect / timed out”**：当前网络无法访问 `api.steampowered.com`。在部分地区该接口不稳定，可以开启网络加速后重试。
+- **证书相关错误**：PlayArc 信任系统证书库，Watt Toolkit 等通过本地证书代理 Steam 的加速工具可以正常使用；如果仍然报错，请确认加速工具的证书已安装。
 
-- 没有填写 Steam API Key 或 Steam64 ID。
-- API Key 无效。
-- Steam64 ID 填错。
-- Steam 个人资料或游戏详情不是公开状态。
-- 网络无法访问 Steam API 或图片 CDN。
-- 某个条目不是正式游戏，而是工具、服务器或运行库，Steam 图片资源可能不存在。
-
-Velaris 会缓存失败结果，避免对不存在的图片频繁请求。
+也请确认 Steam 个人资料和游戏详情为公开状态。对于不存在的图片（工具、服务器、运行库等），PlayArc 会记录失败结果，避免反复请求。
 
 ### 为什么某些游戏记录不到时长？
 
-可能原因：
-
-- 手动添加时选择的不是实际运行中的 exe。
+- 手动添加时选择的不是实际运行的 exe。
 - 游戏通过启动器拉起了另一个真正的游戏进程。
-- 游戏进程启动和退出太快。
-- 路径或进程名发生变化。
-
-手动添加游戏时，尽量选择最终游戏主程序 exe。
+- 游戏启动和退出太快，没有被扫描到（可以在设置中缩短扫描间隔）。
 
 ### API Key 会上传到服务器吗？
 
-不会。Velaris 是本地桌面应用，API Key 用于本机向 Steam API 请求你的游戏库信息。不要把 API Key 发给其他人，也不要提交到公开仓库。
+不会。PlayArc 是本地桌面应用，API Key 只用于在本机向 Steam API 请求你的游戏库信息，也不会出现在错误信息或日志中。
 
 ## 技术栈
 
-- 前端：SvelteKit、TypeScript、Tailwind CSS、ECharts
+- 前端：SvelteKit、Svelte 5、TypeScript、Tailwind CSS v4、ECharts、Lucide
 - 桌面端：Tauri v2
 - 后端：Rust
-- 数据库：SQLite、rusqlite
+- 数据库：SQLite（rusqlite）
 - 更新：Tauri updater + GitHub Releases
 
 ## 开发
 
 请先安装：
 
-- Node.js LTS，建议 20+
-- pnpm
+- Node.js LTS（建议 20+）和 pnpm
 - Rust stable
-- Cargo Tauri 相关构建依赖
+- Tauri CLI：`cargo install tauri-cli --version "^2"`
+- [Tauri 在 Windows 上的构建依赖](https://v2.tauri.app/start/prerequisites/)（WebView2、MSVC 构建工具）
 
-安装依赖：
+安装前端依赖（拉取代码或依赖变化后都需要执行一次）：
 
 ```bash
 pnpm install
 ```
 
-如果 Windows PowerShell 执行策略影响 `pnpm`，可以使用：
+如果 Windows PowerShell 执行策略影响 `pnpm`，可以使用 `pnpm.cmd install`。
 
-```bash
-pnpm.cmd install
-```
-
-启动前端开发服务：
-
-```bash
-pnpm dev
-```
-
-启动 Tauri 桌面开发模式：
+启动桌面开发模式（会自动启动前端开发服务）：
 
 ```bash
 cargo tauri dev
 ```
 
-前端类型检查：
+检查：
 
 ```bash
-pnpm check
-```
-
-Rust 检查：
-
-```bash
-cargo check
+pnpm check        # 前端类型检查
+pnpm lint         # Prettier + ESLint
+cd src-tauri
+cargo clippy      # Rust 静态检查
+cargo test        # Rust 单元测试
 ```
 
 构建发布包：
@@ -379,47 +279,27 @@ cargo check
 cargo tauri build
 ```
 
-Windows 常见构建产物目录：
+Windows 构建产物位于 `src-tauri/target/release/bundle/nsis/` 和 `src-tauri/target/release/bundle/msi/`。
 
-- `src-tauri/target/release/bundle/nsis/`
-- `src-tauri/target/release/bundle/msi/`
+### 图标
+
+应用图标的源文件在 `docs/logo/`：`playarc-icon.svg` 用于 48px 及以上尺寸，`playarc-icon-small.svg` 是 16–32px 使用的简化版本。`src-tauri/icons/icon.ico` 的 16–32px 图层使用简化版本；如果用 `cargo tauri icon` 重新生成图标，需要重新制作这几个小尺寸图层。
 
 ## 贡献
 
-欢迎通过 Pull Request 参与改进。
+欢迎通过 Pull Request 参与改进：
 
-建议流程：
+1. Fork 本仓库，基于自己的 fork 创建功能分支（`feature/*` 或 `fix/*`）。
+2. 完成改动，并在本地运行上面的检查。
+3. 提交 Pull Request 到 `main`，由维护者审核后合并。
 
-1. Fork 本仓库。
-2. 基于自己的 fork 创建功能分支。
-3. 完成改动并在本地运行必要检查。
-4. 提交 Pull Request 到本仓库。
-5. 由维护者审核，通过后合并到主分支。
+版本发布、安装包签名和 GitHub Releases 由维护者统一处理，贡献者不需要接触任何发布私钥或更新签名配置。
 
-版本发布、安装包签名和 GitHub Releases 由维护者统一处理。贡献者不需要接触任何发布私钥或更新签名配置。
-
-## 分支建议
-
-- `main`：稳定主分支，用于合并已审核改动。
-- `feature/*`：功能开发分支。
-- `fix/*`：问题修复分支。
-
-## 数据与资源
-
-Velaris 会在本地用户目录中保存数据库、缓存图标、Steam 封面、详情页背景图和手动添加游戏的资源。构建产物、缓存、数据库和密钥不应提交到 Git。
-
-请勿提交：
-
-- `build/`
-- `src-tauri/target/`
-- 本地数据库文件
-- Steam API Key
-- updater 私钥
-- 其他用户隐私或本机路径敏感数据
+请勿提交：`build/`、`src-tauri/target/`、本地数据库文件、Steam API Key、updater 私钥，以及其他个人隐私或本机路径等敏感数据。
 
 ## 未来规划
 
-后续规划记录在 [FUTURE_ROADMAP.md](./FUTURE_ROADMAP.md)，包括多平台游戏库扫描、成就与媒体增强、目标系统、云同步、备份恢复、游戏洞察和更完整的更新体验。
+后续规划记录在 [FUTURE_ROADMAP.md](./FUTURE_ROADMAP.md)。
 
 ## 参考链接
 
