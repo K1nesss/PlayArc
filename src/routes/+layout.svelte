@@ -11,6 +11,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
+	import { get } from 'svelte/store';
 	import { checkForAppUpdate } from '$lib/updater';
 	import { setLanguage, t } from '$lib/i18n.svelte';
 	import Toaster from '$lib/components/ui/Toaster.svelte';
@@ -18,13 +19,18 @@
 	import { ChevronUp } from '@lucide/svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import {
+		applyExternalSettings,
 		loadSettingsFromStorage,
 		mergeSettings,
 		saveSettingsToStorage,
 		type AppLanguage,
+		type AppSettings,
 		type ThemeMode
 	} from '$lib/settings';
 	let { children } = $props();
+
+	// The tray panel (src/routes/tray) is its own small window: no shell, no app-wide services.
+	const isTrayPanel = $derived($page.route.id === '/tray');
 
 	// 状态管理
 	let darkMode = $state(false);
@@ -274,7 +280,12 @@
 		}
 	}
 
-	async function syncSteamNow() {
+	type SyncOutcome =
+		| { state: 'done' }
+		| { state: 'busy' | 'not_configured' }
+		| { state: 'error'; message: string };
+
+	async function syncSteamNow(): Promise<SyncOutcome> {
 		const settings = await refreshSteamConfigured();
 		if (!syncStatus.configured) {
 			toast.info({
@@ -285,25 +296,26 @@
 				),
 				action: { label: t('去设置', 'Settings'), onClick: () => void goto(resolve('/settings')) }
 			});
-			return;
+			return { state: 'not_configured' };
 		}
-		if (syncStatus.state === 'syncing') return;
+		if (syncStatus.state === 'syncing') return { state: 'busy' };
 		try {
 			const summary = await syncSteamOwnedGameIcons(
 				settings.apiKey,
 				settings.steam64Id,
 				'shortcut_refresh'
 			);
-			if (summary.skipped_reason !== 'sync_already_running') {
-				toast.success(t('同步完成', 'Sync complete'));
-				refreshKey += 1;
-			}
+			if (summary.skipped_reason === 'sync_already_running') return { state: 'busy' };
+			toast.success(t('同步完成', 'Sync complete'));
+			refreshKey += 1;
+			return { state: 'done' };
 		} catch {
 			toast.error({
 				title: t('同步失败', 'Sync failed'),
 				description: syncStatus.error,
 				action: { label: t('去设置', 'Settings'), onClick: () => void goto(resolve('/settings')) }
 			});
+			return { state: 'error', message: syncStatus.error };
 		}
 	}
 
@@ -315,6 +327,12 @@
 	function handleGlobalKeydown(event: KeyboardEvent) {
 		const mod = event.ctrlKey || event.metaKey;
 		const key = event.key.toLowerCase();
+
+		if (isTrayPanel) {
+			// The panel handles its own keys; just never reload or print it.
+			if ((mod && (key === 'r' || key === 'p')) || event.key === 'F5') event.preventDefault();
+			return;
+		}
 
 		if (mod && key === 'k') {
 			event.preventDefault();
@@ -336,6 +354,8 @@
 	}
 
 	onMount(() => {
+		if (get(page).route.id === '/tray') return;
+
 		void (async () => {
 			const appSettings = await loadSettingsFromStorage();
 			language = appSettings.language;
@@ -344,6 +364,42 @@
 			applyResolvedTheme(isDarkByTheme(appSettings.themeMode));
 			initSyncStatus(Boolean(appSettings.apiKey && appSettings.steam64Id));
 			setMaterialEnabled(appSettings.sidebarTransparency);
+		})();
+
+		// Tray menu actions (src-tauri/src/system/tray.rs): open a page, sync, settings changed.
+		const trayPages: Record<string, string> = {
+			home: resolve('/home'),
+			games: resolve('/games'),
+			timeline: resolve('/timeline'),
+			analytics: resolve('/analytics'),
+			settings: resolve('/settings')
+		};
+		let trayUnlisten: (() => void)[] = [];
+		let trayDisposed = false;
+		void (async () => {
+			try {
+				const { listen } = await import('@tauri-apps/api/event');
+				const handles = await Promise.all([
+					listen<string>('tray-navigate', (event) => {
+						const href = trayPages[event.payload];
+						// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()'d above
+						if (href) void goto(href);
+					}),
+					listen('tray-sync', async () => {
+						// Tell the tray panel how it went (it shows the result inline).
+						const outcome = await syncSteamNow();
+						const { emit } = await import('@tauri-apps/api/event');
+						void emit('tray-sync-result', outcome);
+					}),
+					listen<Partial<AppSettings>>('settings-updated', (event) =>
+						applyExternalSettings(event.payload)
+					)
+				]);
+				if (trayDisposed) handles.forEach((unlisten) => unlisten());
+				else trayUnlisten = handles;
+			} catch {
+				// Outside Tauri (browser preview): no tray.
+			}
 		})();
 
 		const autoSyncStart = window.setTimeout(() => void autoSyncIfDue(), AUTO_SYNC_STARTUP_DELAY_MS);
@@ -360,7 +416,7 @@
 		window.addEventListener('pt-settings-change', handleSettingsChange);
 
 		const disposeWindowState = initWindowState();
-		const disposeSyncHandler = registerSyncHandler(syncSteamNow);
+		const disposeSyncHandler = registerSyncHandler(async () => void (await syncSteamNow()));
 
 		try {
 			userCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) !== '0';
@@ -430,6 +486,8 @@
 		window.addEventListener('pt-animations-change', handleAnimationChange);
 
 		return () => {
+			trayDisposed = true;
+			trayUnlisten.forEach((unlisten) => unlisten());
 			disposeWindowState();
 			disposeSyncHandler();
 			window.clearTimeout(autoSyncStart);
@@ -449,6 +507,7 @@
 
 	$effect(() => {
 		void $page.url.pathname;
+		if (isTrayPanel) return;
 		void refreshSteamConfigured().catch(() => {});
 		activeScrollElement = null;
 		scrollingBackToTop = false;
@@ -460,46 +519,50 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
-<div class="app-shell">
-	<Sidebar
-		pathname={$page.url.pathname}
-		collapsed={sidebarCollapsed}
-		forcedCollapsed={narrowWindow}
-		onToggleCollapse={toggleSidebar}
-		onNavigate={handleSidebarNavigate}
-		onSync={syncSteamNow}
-		onOpenSettings={() => void goto(resolve('/settings'))}
-	/>
+{#if isTrayPanel}
+	{@render children()}
+{:else}
+	<div class="app-shell">
+		<Sidebar
+			pathname={$page.url.pathname}
+			collapsed={sidebarCollapsed}
+			forcedCollapsed={narrowWindow}
+			onToggleCollapse={toggleSidebar}
+			onNavigate={handleSidebarNavigate}
+			onSync={syncSteamNow}
+			onOpenSettings={() => void goto(resolve('/settings'))}
+		/>
 
-	<div class="shell-column">
-		<Titlebar />
-		<main bind:this={mainElement} onscrollcapture={handleMainScroll} class="shell-content">
-			{#key refreshKey}
-				{@render children()}
-			{/key}
-		</main>
+		<div class="shell-column">
+			<Titlebar />
+			<main bind:this={mainElement} onscrollcapture={handleMainScroll} class="shell-content">
+				{#key refreshKey}
+					{@render children()}
+				{/key}
+			</main>
+		</div>
+
+		<button
+			type="button"
+			class={`back-to-top-button fixed right-6 bottom-6 z-40 flex h-9 w-9 items-center justify-center rounded-lg border border-line-strong bg-elevated text-fg-muted shadow-(--elevation-2) backdrop-blur-md hover:text-fg ${
+				showBackToTop
+					? 'pointer-events-auto translate-y-0 opacity-100'
+					: 'pointer-events-none translate-y-2 opacity-0'
+			}`}
+			title={language === 'zh-CN' ? '返回顶部' : 'Back to top'}
+			aria-label={language === 'zh-CN' ? '返回顶部' : 'Back to top'}
+			onclick={scrollMainToTop}
+		>
+			<Icon icon={ChevronUp} size="button" />
+		</button>
+
+		<CommandPalette
+			open={paletteOpen}
+			{darkMode}
+			onClose={() => (paletteOpen = false)}
+			onSync={syncSteamNow}
+			onToggleTheme={toggleTheme}
+		/>
+		<Toaster />
 	</div>
-
-	<button
-		type="button"
-		class={`back-to-top-button fixed right-6 bottom-6 z-40 flex h-9 w-9 items-center justify-center rounded-lg border border-line-strong bg-elevated text-fg-muted shadow-(--elevation-2) backdrop-blur-md hover:text-fg ${
-			showBackToTop
-				? 'pointer-events-auto translate-y-0 opacity-100'
-				: 'pointer-events-none translate-y-2 opacity-0'
-		}`}
-		title={language === 'zh-CN' ? '返回顶部' : 'Back to top'}
-		aria-label={language === 'zh-CN' ? '返回顶部' : 'Back to top'}
-		onclick={scrollMainToTop}
-	>
-		<Icon icon={ChevronUp} size="button" />
-	</button>
-
-	<CommandPalette
-		open={paletteOpen}
-		{darkMode}
-		onClose={() => (paletteOpen = false)}
-		onSync={syncSteamNow}
-		onToggleTheme={toggleTheme}
-	/>
-	<Toaster />
-</div>
+{/if}

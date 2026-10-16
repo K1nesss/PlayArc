@@ -49,6 +49,20 @@
 			label={t('关闭时最小化到托盘', 'Keep running in the tray')}
 		/>
 	</SettingsRow>
+	<SettingsRow
+		label={t('托盘菜单样式', 'Tray menu style')}
+		description={t('右键单击托盘图标时打开的菜单', 'What opens when you right-click the tray icon')}
+	>
+		<Select
+			bind:value={settings.trayStyle}
+			ariaLabel={t('托盘菜单样式', 'Tray menu style')}
+			options={[
+				{ value: 'panel', label: t('PlayArc 面板', 'PlayArc panel') },
+				{ value: 'native', label: t('系统菜单', 'System menu') }
+			]}
+			class="w-40"
+		/>
+	</SettingsRow>
 </SettingsGroup>
 
 <SettingsGroup title={t('记录', 'Tracking')}>

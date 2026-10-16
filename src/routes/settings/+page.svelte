@@ -141,12 +141,26 @@
 			loaded = true;
 		})();
 
+		// "Launch at startup" can also be toggled from the tray menu. Take that value
+		// without discarding edits that are still waiting to be saved.
+		const onExternalSettings = (event: Event) => {
+			const next = (event as CustomEvent<AppSettings>).detail;
+			settings.launchOnStartup = next.launchOnStartup;
+			if (lastSaved) {
+				lastSaved = JSON.stringify(
+					mergeSettings({ ...JSON.parse(lastSaved), launchOnStartup: next.launchOnStartup })
+				);
+			}
+		};
+		window.addEventListener('pt-settings-external', onExternalSettings);
+
 		// Follow the OS theme live while "System" is selected.
 		const media = window.matchMedia('(prefers-color-scheme: dark)');
 		const onSystemTheme = () => settings.themeMode === 'system' && applyTheme('system');
 		media.addEventListener('change', onSystemTheme);
 
 		return () => {
+			window.removeEventListener('pt-settings-external', onExternalSettings);
 			media.removeEventListener('change', onSystemTheme);
 			void flush();
 			if (savedTimer !== null) window.clearTimeout(savedTimer);

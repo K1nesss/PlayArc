@@ -180,16 +180,3 @@ pub fn load_home_game(conn: &Connection, game_id: i64) -> Result<HomeGame, Strin
         accent_color,
     })
 }
-
-/// Name of the game being played right now, for the tray menu label.
-pub fn current_game_name() -> Result<Option<String>, String> {
-    let conn = get_db_connection()?;
-    conn.query_row(
-        "SELECT g.name FROM game_sessions s JOIN games g ON g.id = s.game_id
-         WHERE s.end_time IS NULL ORDER BY s.start_time DESC LIMIT 1",
-        [],
-        |row| row.get::<_, String>(0),
-    )
-    .optional()
-    .map_err(|e| e.to_string())
-}

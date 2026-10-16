@@ -7,7 +7,7 @@ mod storage;
 mod system;
 
 use api::analytics::analytics_overview;
-use api::dashboard::{current_game_name, home_snapshot};
+use api::dashboard::home_snapshot;
 use api::games::{
     clear_play_history, create_manual_game, delete_game, delete_game_session, game_detail,
     games_library, hidden_games_list, hide_game, ignored_games_list, restore_hidden_game,
@@ -30,30 +30,11 @@ use system::window_state::{
     capture_window_state, current_monitor_key, ensure_window_fits_current_monitor,
     restore_webview_window_state, save_window_state, WindowState,
 };
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 
 #[tauri::command]
 fn hello() -> String {
     "Hello from Rust".into()
-}
-
-/// Tray menu text in the app's language (Settings › General › Language).
-fn tray_text(zh: &'static str, en: &'static str) -> &'static str {
-    if system::settings::ui_is_english() {
-        en
-    } else {
-        zh
-    }
-}
-
-fn tray_now_playing_label() -> String {
-    match current_game_name() {
-        Ok(Some(name)) => format!("{}{}", tray_text("正在游玩：", "Now playing: "), name),
-        Ok(None) => tray_text("当前没有在玩游戏", "Not playing anything").to_string(),
-        Err(_) => tray_text("无法读取当前游戏", "Couldn’t read the current game").to_string(),
-    }
 }
 
 fn main() {
@@ -124,68 +105,7 @@ fn main() {
             // Keep the OS "launch at startup" entry in sync with the setting.
             system::autostart::apply(app.handle(), settings.launch_on_startup);
 
-            let now_playing_item = MenuItem::with_id(
-                app,
-                "tray_now_playing",
-                tray_now_playing_label(),
-                false,
-                None::<&str>,
-            )?;
-            let show_label = tray_text("显示主窗口", "Show PlayArc");
-            let quit_label = tray_text("退出", "Quit");
-
-            let show_item = MenuItem::with_id(app, "tray_show", show_label, true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "tray_quit", quit_label, true, None::<&str>)?;
-            let tray_menu = Menu::with_items(app, &[&now_playing_item, &show_item, &quit_item])?;
-
-            let icon = app.default_window_icon().cloned();
-
-            let mut tray_builder = TrayIconBuilder::new()
-                .menu(&tray_menu)
-                .show_menu_on_left_click(false)
-                .on_tray_icon_event({
-                    let now_playing_item = now_playing_item.clone();
-                    let show_item = show_item.clone();
-                    let quit_item = quit_item.clone();
-                    move |tray, event| match event {
-                        TrayIconEvent::DoubleClick { .. } => {
-                            if let Some(window) = tray.app_handle().get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
-                        }
-                        TrayIconEvent::Click {
-                            button: MouseButton::Right,
-                            button_state: MouseButtonState::Down,
-                            ..
-                        } => {
-                            // Refresh before the menu opens (language may have changed).
-                            let _ = now_playing_item.set_text(tray_now_playing_label());
-                            let _ = show_item.set_text(tray_text("显示主窗口", "Show PlayArc"));
-                            let _ = quit_item.set_text(tray_text("退出", "Quit"));
-                        }
-                        _ => {}
-                    }
-                })
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "tray_show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.unminimize();
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "tray_quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                });
-
-            if let Some(icon) = icon {
-                tray_builder = tray_builder.icon(icon);
-            }
-
-            let _tray = tray_builder.build(app)?;
+            system::tray::create(app)?;
 
             // Started by Windows at sign-in: stay in the tray if the user keeps the app there.
             let start_hidden =
@@ -198,62 +118,71 @@ fn main() {
         .on_window_event({
             let last_monitor_key = last_monitor_key.clone();
             let pending_window_state = pending_window_state.clone();
-            move |window, event| match event {
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    if let Some(state) = capture_window_state(window) {
-                        save_window_state(&state);
-                    } else if let Ok(guard) = pending_window_state.lock() {
-                        if let Some(state) = guard.as_ref() {
-                            save_window_state(state);
-                        }
-                    }
-                    if system::settings::keep_running_in_tray() {
-                        api.prevent_close();
-                        let _ = window.hide();
-                    } else {
-                        window.app_handle().exit(0);
-                    }
+            move |window, event| {
+                // The tray panel has its own rules (and must not touch the main window's saved state).
+                if window.label() == system::tray::PANEL_LABEL {
+                    system::tray::on_panel_event(window, event);
+                    return;
                 }
-                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
-                    let next_key = current_monitor_key(window);
-                    let monitor_changed = if let Ok(mut previous_key) = last_monitor_key.lock() {
-                        if *previous_key != next_key {
-                            *previous_key = next_key;
-                            true
+                match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        if let Some(state) = capture_window_state(window) {
+                            save_window_state(&state);
+                        } else if let Ok(guard) = pending_window_state.lock() {
+                            if let Some(state) = guard.as_ref() {
+                                save_window_state(state);
+                            }
+                        }
+                        if system::settings::keep_running_in_tray() {
+                            api.prevent_close();
+                            let _ = window.hide();
                         } else {
-                            false
+                            window.app_handle().exit(0);
                         }
-                    } else {
-                        true
-                    };
+                    }
+                    tauri::WindowEvent::Moved(_)
+                    | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                        let next_key = current_monitor_key(window);
+                        let monitor_changed = if let Ok(mut previous_key) = last_monitor_key.lock()
+                        {
+                            if *previous_key != next_key {
+                                *previous_key = next_key;
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            true
+                        };
 
-                    if monitor_changed {
-                        ensure_window_fits_current_monitor(window);
-                    }
+                        if monitor_changed {
+                            ensure_window_fits_current_monitor(window);
+                        }
 
-                    if let Some(state) = capture_window_state(window) {
-                        if let Ok(mut pending) = pending_window_state.lock() {
-                            *pending = Some(state);
+                        if let Some(state) = capture_window_state(window) {
+                            if let Ok(mut pending) = pending_window_state.lock() {
+                                *pending = Some(state);
+                            }
                         }
                     }
-                }
-                tauri::WindowEvent::Resized(_) => {
-                    if let Some(state) = capture_window_state(window) {
-                        if let Ok(mut pending) = pending_window_state.lock() {
-                            *pending = Some(state);
+                    tauri::WindowEvent::Resized(_) => {
+                        if let Some(state) = capture_window_state(window) {
+                            if let Ok(mut pending) = pending_window_state.lock() {
+                                *pending = Some(state);
+                            }
                         }
                     }
-                }
-                tauri::WindowEvent::Focused(false) => {
-                    if let Some(state) = capture_window_state(window) {
-                        save_window_state(&state);
-                    } else if let Ok(guard) = pending_window_state.lock() {
-                        if let Some(state) = guard.as_ref() {
-                            save_window_state(state);
+                    tauri::WindowEvent::Focused(false) => {
+                        if let Some(state) = capture_window_state(window) {
+                            save_window_state(&state);
+                        } else if let Ok(guard) = pending_window_state.lock() {
+                            if let Some(state) = guard.as_ref() {
+                                save_window_state(state);
+                            }
                         }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
         })
         // 注册命令
@@ -289,7 +218,9 @@ fn main() {
             timeline_months,
             timeline_days,
             steam_sync_status,
-            clear_play_history
+            clear_play_history,
+            system::tray::tray_panel_action,
+            system::tray::tray_panel_resize
         ])
         // 启动 App
         .run(tauri::generate_context!())

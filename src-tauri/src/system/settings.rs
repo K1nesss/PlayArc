@@ -41,6 +41,8 @@ pub struct AppSettings {
     pub compact_game_list: bool,
     pub steam_auto_sync: bool,
     pub steam_sync_interval_minutes: u32,
+    /// Tray right-click: `"panel"` (PlayArc panel) or `"native"` (system menu).
+    pub tray_style: String,
 }
 
 impl Default for AppSettings {
@@ -63,6 +65,7 @@ impl Default for AppSettings {
             compact_game_list: false,
             steam_auto_sync: true,
             steam_sync_interval_minutes: 60,
+            tray_style: "panel".to_string(),
         }
     }
 }
@@ -97,7 +100,18 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         .map_err(|e| format!("Failed to write settings {}: {}", path.display(), e))?;
     apply_runtime_settings(&settings);
     crate::system::autostart::apply(&app, settings.launch_on_startup);
+    crate::system::tray::apply_style(&app, &settings.tray_style);
     Ok(settings)
+}
+
+/// Change settings from the backend (e.g. the tray menu) and apply them like a save from the UI.
+pub fn update_app_settings(
+    app: &AppHandle,
+    change: impl FnOnce(&mut AppSettings),
+) -> Result<AppSettings, String> {
+    let mut settings = load_app_settings()?;
+    change(&mut settings);
+    save_app_settings(app.clone(), settings)
 }
 
 pub fn hydrate_runtime_settings() -> Result<AppSettings, String> {
@@ -160,6 +174,10 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
 
     if !matches!(settings.active_scan_interval_seconds, 2 | 3 | 5 | 10) {
         settings.active_scan_interval_seconds = AppSettings::default().active_scan_interval_seconds;
+    }
+
+    if !matches!(settings.tray_style.as_str(), "panel" | "native") {
+        settings.tray_style = AppSettings::default().tray_style;
     }
 
     settings.api_key = settings.api_key.trim().to_string();

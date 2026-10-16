@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type AppLanguage = 'zh-CN' | 'en-US';
+/** Tray right-click: the PlayArc panel or the system menu. */
+export type TrayStyle = 'panel' | 'native';
 
 export type AppSettings = {
   themeMode: ThemeMode;
@@ -24,6 +26,7 @@ export type AppSettings = {
   /** Sync Steam artwork in the background (§8 Steam → Auto Sync). */
   steamAutoSync: boolean;
   steamSyncIntervalMinutes: number;
+  trayStyle: TrayStyle;
 };
 
 /** Analysis ranges in days; 0 = all time. */
@@ -50,6 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   compactGameList: false,
   steamAutoSync: true,
   steamSyncIntervalMinutes: 60,
+  trayStyle: 'panel',
 };
 
 let cachedSettings: AppSettings | null = null;
@@ -112,6 +116,10 @@ export function mergeSettings(input: Partial<AppSettings>): AppSettings {
     merged.themeMode = DEFAULT_SETTINGS.themeMode;
   }
 
+  if (!['panel', 'native'].includes(merged.trayStyle)) {
+    merged.trayStyle = DEFAULT_SETTINGS.trayStyle;
+  }
+
   if (!['zh-CN', 'en-US'].includes(merged.language)) {
     merged.language = DEFAULT_SETTINGS.language;
   }
@@ -137,6 +145,15 @@ export async function loadSettingsFromStorage(): Promise<AppSettings> {
     cachedSettings = loadLegacySettings() ?? { ...DEFAULT_SETTINGS };
     return { ...cachedSettings };
   }
+}
+
+/**
+ * Settings changed outside the UI (e.g. "Launch at startup" from the tray menu).
+ * Updates the cache and tells an open Settings page via `pt-settings-external`.
+ */
+export function applyExternalSettings(input: Partial<AppSettings>) {
+  cachedSettings = mergeSettings({ ...(cachedSettings ?? DEFAULT_SETTINGS), ...input });
+  window.dispatchEvent(new CustomEvent('pt-settings-external', { detail: { ...cachedSettings } }));
 }
 
 export async function saveSettingsToStorage(settings: AppSettings): Promise<AppSettings> {
