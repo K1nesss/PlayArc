@@ -41,3 +41,11 @@ yarn-error.log*
 *.db-shm
 *.sqlite
 *.csv
+
+# Local planning docs and paperwork (not part of the repo)
+/DOIT.md
+/PRO_MONETIZATION_PLAN.md
+/软件著作权申请资料/
+
+# Tool caches
+.playwright-cli/

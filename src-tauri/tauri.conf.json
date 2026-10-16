@@ -2,7 +2,7 @@
 	"$schema": "./tauri.schema.json",
 	"productName": "PlayArc",
 	"mainBinaryName": "PlayArc",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"identifier": "com.k1nesss.Velaris",
 	"build": {
 		"frontendDist": "../build",
