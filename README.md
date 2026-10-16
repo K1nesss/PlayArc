@@ -297,10 +297,6 @@ Windows 构建产物位于 `src-tauri/target/release/bundle/nsis/` 和 `src-taur
 
 请勿提交：`build/`、`src-tauri/target/`、本地数据库文件、Steam API Key、updater 私钥，以及其他个人隐私或本机路径等敏感数据。
 
-## 未来规划
-
-后续规划记录在 [FUTURE_ROADMAP.md](./FUTURE_ROADMAP.md)。
-
 ## 参考链接
 
 - [Steam Web API Documentation](https://steamcommunity.com/dev)
